@@ -1,0 +1,102 @@
+---
+title: "test"
+output: html_document
+runtime: shiny
+author: "Kelly Culpepper & Biniam Garomsa"
+---
+
+## Setup
+
+NOTE: did not add code to check any of the input which means you may get 
+errors if you select an invalid combination
+
+```{r setup, message=FALSE}
+library(tidyverse)
+library(shiny)
+library(data.table)
+```
+
+```{r}
+read_usage = function(file) {
+  data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
+               fill = TRUE, select = c(3,8), na.string = "") %>%
+    na.omit()
+  data$year = str_extract(file, "\\d{4}(?=\\-)") 
+  data$month = str_extract(file, "(?<=\\-)\\d{2}")
+  return(data)
+}
+```
+
+```{r ui}
+months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
+
+ui = fluidPage(
+  sidebarLayout(
+    sidebarPanel(
+      selectInput("generation", "Generation", choices = paste0("Gen ", 1:9)),
+      selectInput("tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU"),
+                  selected = "OU"),
+      selectInput("elo", "Minimum ELO", choices = c(0, 1500, 1630, 1760)),
+      fluidRow(
+        column(width = 6, 
+               selectInput("start_month", "Start Month", choices = months)
+        ),
+        column(width = 6,
+               numericInput("start_year", "Start Year", 2023))),
+      
+      fluidRow(
+        column(width = 6, 
+               selectInput("end_month", "End Month", choices = months)
+        ),
+        column(width = 6,
+               numericInput("end_year", "End Year", 2023))
+      ),
+      actionButton(inputId = "generate", label = "Show data"),
+      uiOutput("pokemon")
+    ),
+  
+    mainPanel(
+      dataTableOutput("data_table"),
+      plotOutput("plot")
+    )
+  )
+)
+```
+
+```{r server}
+server = function(input, output) {
+  observeEvent(input$generate, {
+    urls = list()
+    for (year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
+      for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
+        month_str = ifelse(month < 10, paste0("0", month), toString(month))
+        urls[[paste0(year, "-", month)]] = paste0("https://www.smogon.com/stats/",
+                                                        paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", input$elo, ".txt"))
+      }
+    }
+    
+data = urls %>%
+    map_dfr(~ read_usage(.))
+  colnames(data) = c("pokemon", "usage", "year", "month")
+  
+  output$data_table = renderDataTable({
+    data
+  })
+  
+  output$plot = renderPlot({
+    # plot of usage over time for selected mons
+  })
+  
+  })
+}
+```
+
+```{r app}
+run_smogon = function() {
+  shinyApp(ui = ui, server = server)
+  }
+```
+
+```{r run}
+run_smogon()
+```
