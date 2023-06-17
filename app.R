@@ -1,17 +1,9 @@
----
-title: "Smogon Trends"
-output: html_document
-runtime: shiny
-author: "Kelly Culpepper"
----
-
-```{r setup, message=FALSE}
+# load packages
 library(tidyverse)
 library(shiny)
 library(data.table)
-```
 
-```{r}
+# helper function to scrape data
 read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
                fill = TRUE, select = c(3,8), na.string = "") %>%
@@ -20,11 +12,10 @@ read_usage = function(file) {
   data$month = str_extract(file, "(?<=\\-)\\d{2}")
   return(data)
 }
-```
 
-```{r ui}
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
+# UI
 ui = fluidPage(
   sidebarLayout(
     sidebarPanel(
@@ -48,15 +39,14 @@ ui = fluidPage(
       ),
       uiOutput("pokemon")
     ),
-  
+    
     mainPanel(
       plotOutput("usage_plot")
     )
   )
 )
-```
 
-```{r server}
+# Server
 server = function(input, output, session) {
   
   data <- reactiveVal()
@@ -69,7 +59,7 @@ server = function(input, output, session) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
         urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
-                                                       paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", input$elo, ".txt"))
+                                                      paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", input$elo, ".txt"))
       }
     }
     
@@ -86,7 +76,7 @@ server = function(input, output, session) {
   output$pokemon = renderUI({
     selectizeInput("pokemon", "Select Pokémon", choices = unique_pokemon(), multiple = TRUE, options = list(maxItems = 5))
   })
-
+  
   # update mon input options
   observe({
     updateSelectizeInput(session, "pokemon", choices = unique_pokemon(), selected = NULL, server = TRUE)
@@ -105,14 +95,6 @@ server = function(input, output, session) {
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") 
   })
 }
-```
 
-```{r app}
-run_smogon = function() {
-  shinyApp(ui = ui, server = server)
-  }
-```
-
-```{r run}
-run_smogon()
-```
+# run app
+shinyApp(ui = ui, server = server)
