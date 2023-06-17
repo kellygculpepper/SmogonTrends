@@ -1,7 +1,6 @@
 # load packages
 library(tidyverse)
 library(shiny)
-library(data.table)
 
 # helper function to scrape data
 read_usage = function(file) {
