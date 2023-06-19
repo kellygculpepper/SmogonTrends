@@ -1,8 +1,11 @@
 # load packages
 library(tidyverse)
 library(shiny)
+library(shinythemes)
 
-# helper function to scrape data
+elo = 0 # see below
+
+# helper function to read data
 read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
                fill = TRUE, select = c(3,8), na.string = "") %>%
@@ -16,12 +19,13 @@ months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
 # UI
 ui = fluidPage(
+  # shinytheme("yeti"),
   sidebarLayout(
     sidebarPanel(
       selectInput("generation", "Generation", choices = paste0("Gen ", 1:9)),
       selectInput("tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU"),
                   selected = "OU"),
-      selectInput("elo", "Minimum ELO", choices = c(0, 1500, 1630, 1760)),
+      #selectInput("elo", "Minimum ELO", choices = c(0, 1500, 1630, 1760)),
       fluidRow(
         column(width = 6, 
                selectInput("start_month", "Start Month", choices = months)
@@ -51,14 +55,14 @@ server = function(input, output, session) {
   data <- reactiveVal()
   unique_pokemon <- reactiveVal()
   
-  # read data when user changes gen/tier/elo/time input
-  observeEvent(list(input$generation, input$tier, input$elo, input$start_month, input$start_year, input$end_month, input$end_year), {
+  # read data when user changes gen/tier/elo/time input (ELO removed for now, need to fix)
+  observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
     urls = list()
     for (year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
         urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
-                                                      paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", input$elo, ".txt"))
+                                                      paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", elo, ".txt")) # change back to input$elo
       }
     }
     
