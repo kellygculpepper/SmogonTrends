@@ -5,6 +5,12 @@ library(shinythemes)
 
 elo = 0 # see below
 
+# IMPORTANT during some time periods, the current gen is not listed by 
+# number in the URLs, i.e. "ubers" instead of gen 6 ubers when gen 6
+# was current. need to adjust 
+
+source("imgcolors.R")
+
 # helper function to read data
 read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
@@ -70,7 +76,10 @@ server = function(input, output, session) {
       map_dfr(~ read_usage(.))
     colnames(df) = c("pokemon", "usage", "year", "month")
     df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
-    df = df %>% arrange(pokemon, date) # Ensure data is sorted by pokemon and date
+    df = df %>%
+      arrange(pokemon, date) #%>% # Ensure data is sorted by pokemon and date
+      #add_IDs() %>%
+      #add_color()
     data(df) # update the reactive value
     unique_pokemon(unique(df$pokemon)) # update the unique Pokemon
   })
@@ -89,13 +98,18 @@ server = function(input, output, session) {
   output$usage_plot = renderPlot({
     req(data())
     req(input$pokemon)
-    selected_data = data() %>% filter(pokemon %in% input$pokemon)
+    selected_data = data() %>%
+      filter(pokemon %in% input$pokemon) %>%
+      add_IDs() %>%
+      add_color() #%>%
+      #mutate(Color = as.factor(Color))
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line() +
       labs(x = "Time", y = "Usage", color = "Pokémon") +
       theme_minimal() +
       ggtitle("Usage of selected Pokemon over time") +
-      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") 
+      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") #+
+      #scale_color_manual(values = levels(selected_data$Color))
   })
 }
 

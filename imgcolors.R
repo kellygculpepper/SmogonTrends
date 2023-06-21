@@ -3,7 +3,7 @@ library(rvest)
 library(imgpalr)
 library(purrr)
 
-mon_data = read.csv("Pokemon.csv", header = TRUE)
+mon_data = read.csv("data/Pokemon.csv", header = TRUE)
 
 getID <- function(x) {
   # nidoran handling, fix later (also need to fix urshifu single strike, possibly others)
