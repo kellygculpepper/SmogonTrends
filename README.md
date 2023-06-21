@@ -4,11 +4,11 @@ SmogonTrends
 [![Project Status: WIP – Initial development is in progress, but there has not yet been a stable, usable release suitable for the public.](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
 
 This project will allow users to visualize trends in Pokémon Showdown data over time. Current functionality includes visualizing usage rates of up to 5 Pokémon over time,
-for a selected metagame, time period, and minimum ELO. Improved visuals and additional plots are in development. The app will ultimately be hosted online.
+for a selected metagame & time period. Improved visuals and additional plots are in development. The app will ultimately be hosted online.
 
 Data
 ----
-Data is sourced from [Smogon](https://www.smogon.com/stats/). 
+Usage data is sourced from [Smogon](https://www.smogon.com/stats/). Additionally, this project uses the `Pokemon.csv` dataset from [pokemonData](https://github.com/lgreski/pokemonData), authored by lgreski, to match Pokémon with their IDs, enabling scraping of colors.
 
 Installation and Usage
 ----------------------
