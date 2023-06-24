@@ -107,12 +107,12 @@ add_colors <- function(df) {
   unique_pokemon <- unique_pokemon %>%
     mutate(color = map_chr(img_URL, function(img_url) {
       image_pal(file = img_url,
-                n = 1, type = "div", k = 3, bw = c(0.1, 0.8), seq_by = "shv", plot = FALSE)
+                n = 1, type = "div", k = 3, bw = c(0.1, 0.8), seq_by = "shv", plot = FALSE,
+                seed = 777)
     }))
   
   df <- df %>%
-    left_join(unique_pokemon, by = "pokemon") %>%
-    select(pokemon, ID, color)
+    left_join(unique_pokemon, by = "pokemon")
   
   return(df)
 }
@@ -120,8 +120,8 @@ add_colors <- function(df) {
 
 
 # TEST CASE
-pokemon_names = c("Tauros", "Meowth-Alola", "Tauros")
-df = data.frame(pokemon = pokemon_names)
-final_df = df %>%
-  add_colors()
-print(final_df)
+#pokemon_names = c("Tauros", "Meowth-Alola", "Tauros")
+#df = data.frame(pokemon = pokemon_names)
+#final_df = df %>%
+#  add_colors()
+#print(final_df)

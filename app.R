@@ -5,9 +5,8 @@ library(shinythemes)
 
 elo = 0 # see below
 
-# IMPORTANT during some time periods, the current gen is not listed by 
-# number in the URLs, i.e. "ubers" instead of gen 6 ubers when gen 6
-# was current. need to adjust 
+# TODO fix gen 6 data reading
+# TODO rewrite color function to be faster (would be even better to just store the values?)
 
 source("imgcolors.R")
 
@@ -67,9 +66,18 @@ server = function(input, output, session) {
     for (year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
-        urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
-                                                      paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", elo, ".txt")) # change back to input$elo
+        
+        # FIX, not working
+        # meant to use alternative URL format for when gen 6 was current
+        if (substr(input$generation, 5, 5) == "6" & (year < 2016 | (year == 2016 & month <= 10))) {
+          urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
+                                                        paste0(year, "-", month_str, "/", str_to_lower(input$tier), "-", elo, ".txt")) # fix elo later
+        } else {
+          urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
+                                                        paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", elo, ".txt")) # fix elo later
+        }
       }
+      
     }
     
     df = urls %>%
@@ -100,16 +108,16 @@ server = function(input, output, session) {
     req(input$pokemon)
     selected_data = data() %>%
       filter(pokemon %in% input$pokemon) %>%
-      add_IDs() %>%
-      add_color() #%>%
-      #mutate(Color = as.factor(Color))
+      add_colors()
+    # TODO change color script to just produce the mapping to begin with
+    color_mapping <- setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line() +
       labs(x = "Time", y = "Usage", color = "Pokémon") +
       theme_minimal() +
       ggtitle("Usage of selected Pokemon over time") +
-      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") #+
-      #scale_color_manual(values = levels(selected_data$Color))
+      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+      scale_color_manual(values = color_mapping) # use color mapping here
   })
 }
 
