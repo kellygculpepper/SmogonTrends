@@ -6,41 +6,6 @@ library(purrr)
 
 mon_data = read.csv("data/Pokemon.csv", header = TRUE)
 
-getID = function(x) {
-  # nidoran handling
-  if (x == "NidoranF") return(29)
-  if (x == "NidoranM") return(32)
-  
-  # check for hyphen
-  if (!str_detect(x, "-")) {
-    return(mon_data %>% filter(Name == x, str_trim(Form) == "") %>% pull(ID) %>% first())
-  }
-  
-  # handle regionals
-  if (str_detect(x, "Galar|Paldea|Alola")) {
-    region = str_extract(x, "Galar|Paldea|Alola")
-    name = str_extract(x, "^[^-]*")
-    return(mon_data %>% filter(str_detect(Form, region), str_detect(Form, name)) %>% pull(ID) %>% first())
-  }
-  
-  # split by hyphen
-  parts = str_split(x, "-", simplify = TRUE)
-  
-  # attempt to match form
-  form_match = mon_data %>% filter(sapply(Form, function(f) all(str_detect(tolower(f), tolower(parts[2:length(parts)]))))) %>% pull(ID) %>% first()
-  if (!is.na(form_match)) return(form_match)
-  
-  # if matching form fails use name
-  return(mon_data %>% filter(str_detect(tolower(Name), tolower(parts[1]))) %>% pull(ID) %>% first())
-}
-
-add_IDs = function(df) {
-  df= df %>% mutate(ID = sapply(pokemon, getID))
-  df$ID = sprintf("%04d", df$ID)
-  df$ID = paste0("#", df$ID)
-  return(df)
-}
-
 get_URL <- function(url, ID) {
   
   parsed_html <- read_html(url)
@@ -117,11 +82,3 @@ mon_data = mon_data %>%
   add_colors()
 
 write.csv(mon_data, "data/colors.csv", row.names = FALSE)
-
-
-# TEST CASE
-#pokemon_names = c("Tauros", "Meowth-Alola", "Tauros")
-#df = data.frame(pokemon = pokemon_names)
-#final_df = df %>%
-#  add_colors()
-#print(final_df)
