@@ -8,7 +8,10 @@ elo = 0 # see below
 # TODO fix gen 6 data reading
 # TODO rewrite color function to be faster (would be even better to just store the values?)
 
-source("imgcolors.R")
+source("colormatch.R")
+
+mon_data = read.csv("data/colors.csv", header = TRUE) %>%
+  select(Name, Form, ID, color)
 
 # helper function to read data
 read_usage = function(file) {
@@ -108,7 +111,7 @@ server = function(input, output, session) {
     req(input$pokemon)
     selected_data = data() %>%
       filter(pokemon %in% input$pokemon) %>%
-      add_colors()
+      match_colors()
     # TODO change color script to just produce the mapping to begin with
     color_mapping <- setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +

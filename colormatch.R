@@ -6,8 +6,8 @@ color_data = read.csv("data/colors.csv", header = TRUE)
 
 getID = function(x) {
   # nidoran handling
-  if (x == "NidoranF") return(29)
-  if (x == "NidoranM") return(32)
+  if (x == "NidoranF") return("#0029")
+  if (x == "NidoranM") return("#0032")
   
   # check for hyphen
   if (!str_detect(x, "-")) {
@@ -34,8 +34,6 @@ getID = function(x) {
 
 add_IDs = function(df) {
   df = df %>% mutate(ID = sapply(pokemon, getID))
-  df$ID = sprintf("%04d", df$ID)
-  df$ID = paste0("#", df$ID)
   return(df)
 }
 
