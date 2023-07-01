@@ -5,13 +5,21 @@ library(shinythemes)
 
 elo = 0 # see below
 
-# TODO fix gen 6 data reading
-# TODO rewrite color function to be faster (would be even better to just store the values?)
+# TODO
+# fix gen 6 data reading
+# add links
+# update header, fonts, colors, change some formatting on plot
+
+# TODO for elo gap:
+# research about elo and about when each gen started
+# create function that returns boolean of whether given generation was current
+# during given month
+# write code to read data using above function as conditional for which ELOs to 
+# read
+# write function to subtract the numbers for each month?
+
 
 source("colormatch.R")
-
-mon_data = read.csv("data/colors.csv", header = TRUE) %>%
-  select(Name, Form, ID, color)
 
 # helper function to read data
 read_usage = function(file) {
@@ -27,24 +35,44 @@ months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
 # UI
 ui = fluidPage(
-  # shinytheme("yeti"),
+  theme = shinytheme("yeti"),
+  
+  tags$head(
+    tags$link(rel = "preconnect", href = "https://fonts.googleapis.com"),
+    tags$link(rel = "preconnect", href = "https://fonts.gstatic.com", crossorigin = ""),
+    tags$link(href = "https://fonts.googleapis.com/css2?family=Bangers&display=swap", rel = "stylesheet"),
+    
+    tags$style(
+      HTML("
+        .title-class {
+          font-family: 'Bangers', cursive;
+          font-size: 40px;
+          color: #000;
+        }
+      ")
+    )
+  ),
+  
+  tags$div(
+    class = "title-class",
+    "SmogonTrends"
+  ),
+  
   sidebarLayout(
     sidebarPanel(
       selectInput("generation", "Generation", choices = paste0("Gen ", 1:9)),
       selectInput("tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU"),
                   selected = "OU"),
-      #selectInput("elo", "Minimum ELO", choices = c(0, 1500, 1630, 1760)),
       fluidRow(
         column(width = 6, 
-               selectInput("start_month", "Start Month", choices = months)
-        ),
+               selectInput("start_month", "Start Month", choices = months)),
         column(width = 6,
-               numericInput("start_year", "Start Year", 2023))),
+               numericInput("start_year", "Start Year", 2023))
+      ),
       
       fluidRow(
         column(width = 6, 
-               selectInput("end_month", "End Month", choices = months)
-        ),
+               selectInput("end_month", "End Month", choices = months)),
         column(width = 6,
                numericInput("end_year", "End Year", 2023))
       ),
@@ -52,7 +80,10 @@ ui = fluidPage(
     ),
     
     mainPanel(
-      plotOutput("usage_plot")
+      tabsetPanel(
+        tabPanel("Usage", plotOutput("usage_plot")), 
+        tabPanel("ELO Gap")  # placeholder
+      )
     )
   )
 )
@@ -88,11 +119,9 @@ server = function(input, output, session) {
     colnames(df) = c("pokemon", "usage", "year", "month")
     df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
     df = df %>%
-      arrange(pokemon, date) #%>% # Ensure data is sorted by pokemon and date
-      #add_IDs() %>%
-      #add_color()
-    data(df) # update the reactive value
-    unique_pokemon(unique(df$pokemon)) # update the unique Pokemon
+      arrange(pokemon, date) # sort so it will graph correctly
+    data(df)
+    unique_pokemon(unique(df$pokemon))
   })
   
   # mon input
@@ -112,7 +141,6 @@ server = function(input, output, session) {
     selected_data = data() %>%
       filter(pokemon %in% input$pokemon) %>%
       match_colors()
-    # TODO change color script to just produce the mapping to begin with
     color_mapping <- setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line() +
@@ -120,7 +148,7 @@ server = function(input, output, session) {
       theme_minimal() +
       ggtitle("Usage of selected Pokemon over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
-      scale_color_manual(values = color_mapping) # use color mapping here
+      scale_color_manual(values = color_mapping)
   })
 }
 
