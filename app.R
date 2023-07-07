@@ -6,7 +6,7 @@ library(shinythemes)
 elo = 0 # see below
 
 # TODO
-# fix gen 6 data reading
+# test gen 6 data reading
 # add links
 # update header, fonts, colors, change some formatting on plot
 
@@ -103,7 +103,7 @@ server = function(input, output, session) {
         
         # FIX, not working
         # meant to use alternative URL format for when gen 6 was current
-        if (substr(input$generation, 5, 5) == "6" & (year < 2016 | (year == 2016 & month <= 10))) {
+        if (substr(input$generation, 5, 5) == "6" & (year < 2017 | (year == 2017 & month <= 06))) {
           urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
                                                         paste0(year, "-", month_str, "/", str_to_lower(input$tier), "-", elo, ".txt")) # fix elo later
         } else {
@@ -143,10 +143,10 @@ server = function(input, output, session) {
       match_colors()
     color_mapping <- setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
-      geom_line() +
+      geom_line(linewidth = 1.2) +
       labs(x = "Time", y = "Usage", color = "Pokémon") +
       theme_minimal() +
-      ggtitle("Usage of selected Pokemon over time") +
+      #ggtitle("Usage of selected Pokemon over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
   })
