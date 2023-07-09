@@ -11,11 +11,6 @@ elo = 0 # see below
 # update header, fonts, colors, change some formatting on plot
 
 # TODO for elo gap:
-# research about elo and about when each gen started
-# create function that returns boolean of whether given generation was current
-# during given month
-# write code to read data using above function as conditional for which ELOs to 
-# read
 # write function to subtract the numbers for each month?
 
 
@@ -28,7 +23,51 @@ read_usage = function(file) {
     na.omit()
   data$year = str_extract(file, "\\d{4}(?=\\-)") 
   data$month = str_extract(file, "(?<=\\-)\\d{2}")
+  data$elo = str_extract(file, "(?<=-)\\d+(?=\\.txt)")
   return(data)
+}
+
+# helper function to retrieve URLs
+get_data_links <- function(url, generation, tier, year, month) {
+  
+  webpage <- read_html(url)
+  all_links <- webpage %>%
+    html_nodes("a") %>%
+    html_attr("href")
+  
+  if(generation == "6" & (year < 2017 | (year == 2017 & month <= 6))){
+    pattern <- paste0("^", tier, "-\\d+\\.txt$")
+  } else {
+    pattern <- paste0("^gen", generation, tier, "-\\d+\\.txt$")
+  }
+  
+  links <- all_links[stringr::str_detect(all_links, pattern)]
+  
+  # get links for 0 elo and highest elo
+  link_digits <- sapply(strsplit(sub("\\.txt", "", links), "-"), `[`, 2)
+  link_digits <- as.integer(link_digits)
+  
+  index_zero <- which(link_digits == 0)
+  index_max <- which.max(link_digits)
+  
+  ans = c(links[index_zero], links[index_max])
+  
+}
+
+# calculate elo gap
+# do we need handling for if a mon is listed in one elo's data but not the other?
+calculate_gap <- function(df) {
+  df_new <- df %>%
+    group_by(date, pokemon) %>%
+    mutate(
+      usage_0 = ifelse(elo == '0', usage, NA),
+      usage_highest = ifelse(elo != '0', usage, NA)
+    ) %>%
+    mutate(elo_gap = usage_highest - usage_0) %>%
+    select(date, pokemon, elo_gap, usage = usage_0) %>%
+    distinct()
+  
+  return(df_new)
 }
 
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
@@ -101,8 +140,6 @@ server = function(input, output, session) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
         
-        # FIX, not working
-        # meant to use alternative URL format for when gen 6 was current
         if (substr(input$generation, 5, 5) == "6" & (year < 2017 | (year == 2017 & month <= 06))) {
           urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
                                                         paste0(year, "-", month_str, "/", str_to_lower(input$tier), "-", elo, ".txt")) # fix elo later
@@ -116,7 +153,9 @@ server = function(input, output, session) {
     
     df = urls %>%
       map_dfr(~ read_usage(.))
-    colnames(df) = c("pokemon", "usage", "year", "month")
+    colnames(df) = c("pokemon", "usage", "year", "month", "elo")
+    df$usage = gsub("%", "", df$usage)
+    df$usage = as.numeric(df$usage)
     df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
     df = df %>%
       arrange(pokemon, date) # sort so it will graph correctly
