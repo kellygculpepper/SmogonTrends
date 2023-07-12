@@ -3,19 +3,12 @@ library(tidyverse)
 library(shiny)
 library(shinythemes)
 
-elo = 0 # see below
-
 # TODO
 # test gen 6 data reading
 # add links
 # update header, fonts, colors, change some formatting on plot
 
-# TODO for elo gap:
-# write function to subtract the numbers for each month?
-
-
 source("colormatch.R")
-
 # helper function to read data
 read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
@@ -27,15 +20,17 @@ read_usage = function(file) {
   return(data)
 }
 
-# helper function to retrieve URLs
-get_data_links <- function(url, generation, tier, year, month) {
+# helper function to retrieve URLs - works given correct input
+get_data_links <- function(generation, tier, year, month) {
+  
+  url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
   
   webpage <- read_html(url)
   all_links <- webpage %>%
     html_nodes("a") %>%
     html_attr("href")
   
-  if(generation == "6" & (year < 2017 | (year == 2017 & month <= 6))){
+  if(generation == "6" & (year < 2017 | (year == 2017 & as.integer(month) <= 6))){
     pattern <- paste0("^", tier, "-\\d+\\.txt$")
   } else {
     pattern <- paste0("^gen", generation, tier, "-\\d+\\.txt$")
@@ -51,10 +46,10 @@ get_data_links <- function(url, generation, tier, year, month) {
   index_max <- which.max(link_digits)
   
   ans = c(links[index_zero], links[index_max])
-  
+  return(paste0(url, ans))
 }
 
-# calculate elo gap
+# calculate elo gap - not working
 # do we need handling for if a mon is listed in one elo's data but not the other?
 calculate_gap <- function(df) {
   df_new <- df %>%
@@ -68,6 +63,15 @@ calculate_gap <- function(df) {
     distinct()
   
   return(df_new)
+}
+
+calculate_gap_new <- function(df) {
+  df %>%
+    group_by(pokemon, year, month) %>%
+    mutate(elo_gap = usage[elo != 0] - usage[elo == 0]) %>%
+    ungroup() %>%
+    filter(elo == 0) %>%
+    select(pokemon, year, month, usage, elo_gap)
 }
 
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
@@ -121,7 +125,7 @@ ui = fluidPage(
     mainPanel(
       tabsetPanel(
         tabPanel("Usage", plotOutput("usage_plot")), 
-        tabPanel("ELO Gap")  # placeholder
+        tabPanel("ELO Gap", plotOutput("elo_gap_plot")) 
       )
     )
   )
@@ -139,14 +143,10 @@ server = function(input, output, session) {
     for (year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
-        
-        if (substr(input$generation, 5, 5) == "6" & (year < 2017 | (year == 2017 & month <= 06))) {
-          urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
-                                                        paste0(year, "-", month_str, "/", str_to_lower(input$tier), "-", elo, ".txt")) # fix elo later
-        } else {
-          urls[[paste0(year, "-", month_str)]] = paste0("https://www.smogon.com/stats/",
-                                                        paste0(year, "-", month_str, "/", "gen", substr(input$generation, 5, 5), str_to_lower(input$tier), "-", elo, ".txt")) # fix elo later
-        }
+    
+        current_urls = get_data_links(generation = substr(input$generation, 5, 5), tier = tolower(input$tier), year = year, month = month_str)
+        # Add the returned vector of strings to the list
+        urls = c(urls, current_urls)
       }
       
     }
@@ -156,9 +156,12 @@ server = function(input, output, session) {
     colnames(df) = c("pokemon", "usage", "year", "month", "elo")
     df$usage = gsub("%", "", df$usage)
     df$usage = as.numeric(df$usage)
+    df = df %>%
+      calculate_gap_new()
     df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
     df = df %>%
-      arrange(pokemon, date) # sort so it will graph correctly
+      arrange(pokemon, date) %>% # sort so it will graph correctly
+      match_colors() 
     data(df)
     unique_pokemon(unique(df$pokemon))
   })
@@ -173,13 +176,18 @@ server = function(input, output, session) {
     updateSelectizeInput(session, "pokemon", choices = unique_pokemon(), selected = NULL, server = TRUE)
   })
   
+  selected_data = reactiveVal()
+  
+  observeEvent(input$pokemon, {
+    selected_data(data() %>%
+                    filter(pokemon %in% input$pokemon))
+  })
+  
   # usage over time plot
   output$usage_plot = renderPlot({
     req(data())
     req(input$pokemon)
-    selected_data = data() %>%
-      filter(pokemon %in% input$pokemon) %>%
-      match_colors()
+    selected_data = selected_data()
     color_mapping <- setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
@@ -188,6 +196,21 @@ server = function(input, output, session) {
       #ggtitle("Usage of selected Pokemon over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
+  })
+  
+  output$elo_gap_plot = renderPlot({
+    req(data)
+    req(input$pokemon)
+    selected_data = selected_data()
+    color_mapping <- setNames(selected_data$color, selected_data$pokemon)
+    ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
+      geom_line(linewidth = 1.2) +
+      labs(x = "Time", y = "ELO Gap", color = "Pokémon") +
+      theme_minimal() +
+      ggtitle("Difference in Usage (Highest minus lowest) over time") +
+      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+      scale_color_manual(values = color_mapping)
+    
   })
 }
 
