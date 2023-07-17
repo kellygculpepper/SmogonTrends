@@ -9,15 +9,33 @@ library(shinythemes)
 # update header, fonts, colors, change some formatting on plot
 
 source("colormatch.R")
+
 # helper function to read data
 read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
-               fill = TRUE, select = c(3,8), na.string = "") %>%
+               fill = TRUE, select = c(3, 4), na.string = "") %>%
     na.omit()
   data$year = str_extract(file, "\\d{4}(?=\\-)") 
   data$month = str_extract(file, "(?<=\\-)\\d{2}")
   data$elo = str_extract(file, "(?<=-)\\d+(?=\\.txt)")
   return(data)
+}
+
+# helper function to read metagame data
+read_teams = function(file) {
+  
+  data <- readLines(file)
+  data <- data[data != ""]
+  
+  names <- str_trim(str_extract(data, "[^\\.]*"))
+  percents <- str_trim(str_extract(data, "\\d+\\.\\d+")) %>% as.numeric()
+  
+  df <- data.frame(names, percents)
+  
+  selected_columns <- c("weatherless", "rain", "sun", "sand", "hail", "offense", "hyperoffense", "semistall", "stall")
+  df <- df %>% filter(names %in% selected_columns)
+  df$year = str_extract(file, "\\d{4}(?=\\-)")
+  df$month = str_extract(file, "(?<=\\-)\\d{2}")
 }
 
 # helper function to retrieve URLs - works given correct input
@@ -49,23 +67,9 @@ get_data_links <- function(generation, tier, year, month) {
   return(paste0(url, ans))
 }
 
-# calculate elo gap - not working
+# calculate elo gap
 # do we need handling for if a mon is listed in one elo's data but not the other?
 calculate_gap <- function(df) {
-  df_new <- df %>%
-    group_by(date, pokemon) %>%
-    mutate(
-      usage_0 = ifelse(elo == '0', usage, NA),
-      usage_highest = ifelse(elo != '0', usage, NA)
-    ) %>%
-    mutate(elo_gap = usage_highest - usage_0) %>%
-    select(date, pokemon, elo_gap, usage = usage_0) %>%
-    distinct()
-  
-  return(df_new)
-}
-
-calculate_gap_new <- function(df) {
   df %>%
     group_by(pokemon, year, month) %>%
     mutate(elo_gap = usage[elo != 0] - usage[elo == 0]) %>%
@@ -77,7 +81,11 @@ calculate_gap_new <- function(df) {
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
 # UI
-ui = fluidPage(
+ui = navbarPage(
+    title = tags$div(
+      class = "title-class",
+      "SmogonTrends"),
+    
   theme = shinytheme("yeti"),
   
   tags$head(
@@ -90,17 +98,18 @@ ui = fluidPage(
         .title-class {
           font-family: 'Bangers', cursive;
           font-size: 40px;
-          color: #000;
+          color: white;
+        }
+        
+         .navbar .navbar-nav {
+          float: right;
         }
       ")
     )
   ),
   
-  tags$div(
-    class = "title-class",
-    "SmogonTrends"
-  ),
-  
+  tabPanel("Mons",
+    fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("generation", "Generation", choices = paste0("Gen ", 1:9)),
@@ -129,6 +138,47 @@ ui = fluidPage(
       )
     )
   )
+  )
+  ),
+  
+  tabPanel("Teams",
+           fluidPage(
+             sidebarLayout(
+               sidebarPanel(
+                 selectInput("teams_gen", "Generation", choices = paste0("Gen ", 1:9)),
+                 selectInput("teams_tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU"),
+                             selected = "OU"),
+                 fluidRow(
+                   column(width = 6, 
+                          selectInput("teams_start_month", "Start Month", choices = months)),
+                   column(width = 6,
+                          numericInput("teams_start_year", "Start Year", 2023))
+                 ),
+                 
+                 fluidRow(
+                   column(width = 6, 
+                          selectInput("teams_end_month", "End Month", choices = months)),
+                   column(width = 6,
+                          numericInput("teams_end_year", "End Year", 2023))
+                 )
+               ),
+               mainPanel(
+                 tabsetPanel(
+                   tabPanel("Weather", plotOutput("weather_plot")), 
+                   tabPanel("Playstyle", plotOutput("style_plot")) 
+                 )
+               )
+             )
+           )),
+  
+  tabPanel("Monthly Summary",
+           fluidPage(
+             sidebarLayout(
+               sidebarPanel(),
+               mainPanel()
+             )
+           )),
+  tabPanel("About")
 )
 
 # Server
@@ -157,7 +207,7 @@ server = function(input, output, session) {
     df$usage = gsub("%", "", df$usage)
     df$usage = as.numeric(df$usage)
     df = df %>%
-      calculate_gap_new()
+      calculate_gap()
     df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
     df = df %>%
       arrange(pokemon, date) %>% # sort so it will graph correctly
@@ -165,6 +215,18 @@ server = function(input, output, session) {
     data(df)
     unique_pokemon(unique(df$pokemon))
   })
+  
+  observeEvent(list(input$teams_gen, input$teams_tier, input$teams_start_month, input$teams_start_year, input$teams_end_month, input$teams_end_year), {
+    urls = list()
+    for (year in seq(as.integer(input$teams_start_year), as.integer(input$teams_end_year))) {
+      for (month in seq(as.integer(input$teams_start_month), as.integer(input$teams_end_month))) {
+        month_str = ifelse(month < 10, paste0("0", month), toString(month))
+        
+        
+      }
+    }
+  }
+               )
   
   # mon input
   output$pokemon = renderUI({
