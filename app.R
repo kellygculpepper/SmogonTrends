@@ -7,10 +7,13 @@ library(shinythemes)
 # test gen 6 data reading
 # add links
 # update header, fonts, colors, change some formatting on plot
+# fix usage plot updating—-when changing dates etc. after already selecting
+# pokemon it doesn't update
+# consider tweaking the purple in the playstyle graph
 
 source("colormatch.R")
 
-# helper function to read data
+# function to read usage data
 read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
                fill = TRUE, select = c(3, 4), na.string = "") %>%
@@ -21,47 +24,69 @@ read_usage = function(file) {
   return(data)
 }
 
-# helper function to read metagame data
+# function to read teams/metagame data
 read_teams = function(file) {
   
-  data <- readLines(file)
-  data <- data[data != ""]
+  data = readLines(file)
+  data = data[data != ""]
   
-  names <- str_trim(str_extract(data, "[^\\.]*"))
-  percents <- str_trim(str_extract(data, "\\d+\\.\\d+")) %>% as.numeric()
+  names = str_trim(str_extract(data, "[^\\.]*"))
+  percents = str_trim(str_extract(data, "\\d+\\.\\d+")) %>% as.numeric()
   
-  df <- data.frame(names, percents)
+  df = data.frame(names, percents)
   
-  selected_columns <- c("weatherless", "rain", "sun", "sand", "hail", "offense", "hyperoffense", "semistall", "stall")
-  df <- df %>% filter(names %in% selected_columns)
+  selected_vals = c("weatherless", "rain", "sun", "sand", "hail", "multiweather", "offense", "hyperoffense", "semistall", "stall", "balance")
+  df = df %>% filter(names %in% selected_vals)
   df$year = str_extract(file, "\\d{4}(?=\\-)")
   df$month = str_extract(file, "(?<=\\-)\\d{2}")
+  df$elo = str_trim(str_extract(file, "(?<=-)\\d+(?=\\.txt)"))
+  
+  return(df)
 }
 
-# helper function to retrieve URLs - works given correct input
-get_data_links <- function(generation, tier, year, month) {
+# function to get links for metagame data
+get_team_links = function(generation, tier, year, month) {
+  url = paste0("https://www.smogon.com/stats/", year, "-", month, "/metagame/")
   
-  url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
-  
-  webpage <- read_html(url)
-  all_links <- webpage %>%
+  webpage = read_html(url)
+  all_links = webpage %>%
     html_nodes("a") %>%
     html_attr("href")
   
   if(generation == "6" & (year < 2017 | (year == 2017 & as.integer(month) <= 6))){
-    pattern <- paste0("^", tier, "-\\d+\\.txt$")
+    pattern = paste0("^", tier, "-\\d+\\.txt$")
   } else {
-    pattern <- paste0("^gen", generation, tier, "-\\d+\\.txt$")
+    pattern = paste0("^gen", generation, tier, "-\\d+\\.txt$")
   }
   
-  links <- all_links[stringr::str_detect(all_links, pattern)]
+  links = all_links[stringr::str_detect(all_links, pattern)]
+  return(paste0(url, links))
+}
+
+# function to retrieve URLs for usage
+get_data_links = function(generation, tier, year, month) {
+  
+  url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
+  
+  webpage = read_html(url)
+  all_links = webpage %>%
+    html_nodes("a") %>%
+    html_attr("href")
+  
+  if(generation == "6" & (year < 2017 | (year == 2017 & as.integer(month) <= 6))){
+    pattern = paste0("^", tier, "-\\d+\\.txt$")
+  } else {
+    pattern = paste0("^gen", generation, tier, "-\\d+\\.txt$")
+  }
+  
+  links = all_links[stringr::str_detect(all_links, pattern)]
   
   # get links for 0 elo and highest elo
-  link_digits <- sapply(strsplit(sub("\\.txt", "", links), "-"), `[`, 2)
-  link_digits <- as.integer(link_digits)
+  link_digits = sapply(strsplit(sub("\\.txt", "", links), "-"), `[`, 2)
+  link_digits = as.integer(link_digits)
   
-  index_zero <- which(link_digits == 0)
-  index_max <- which.max(link_digits)
+  index_zero = which(link_digits == 0)
+  index_max = which.max(link_digits)
   
   ans = c(links[index_zero], links[index_max])
   return(paste0(url, ans))
@@ -69,7 +94,7 @@ get_data_links <- function(generation, tier, year, month) {
 
 # calculate elo gap
 # do we need handling for if a mon is listed in one elo's data but not the other?
-calculate_gap <- function(df) {
+calculate_gap = function(df) {
   df %>%
     group_by(pokemon, year, month) %>%
     mutate(elo_gap = usage[elo != 0] - usage[elo == 0]) %>%
@@ -160,7 +185,8 @@ ui = navbarPage(
                           selectInput("teams_end_month", "End Month", choices = months)),
                    column(width = 6,
                           numericInput("teams_end_year", "End Year", 2023))
-                 )
+                 ),
+                 uiOutput("teams_elo")
                ),
                mainPanel(
                  tabsetPanel(
@@ -184,8 +210,11 @@ ui = navbarPage(
 # Server
 server = function(input, output, session) {
   
-  data <- reactiveVal()
-  unique_pokemon <- reactiveVal()
+  data = reactiveVal()
+  unique_pokemon = reactiveVal()
+  
+  teams_data = reactiveVal()
+  team_lvls = reactiveVal()
   
   # read data when user changes gen/tier/elo/time input (ELO removed for now, need to fix)
   observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
@@ -195,7 +224,7 @@ server = function(input, output, session) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
     
         current_urls = get_data_links(generation = substr(input$generation, 5, 5), tier = tolower(input$tier), year = year, month = month_str)
-        # Add the returned vector of strings to the list
+        
         urls = c(urls, current_urls)
       }
       
@@ -222,11 +251,21 @@ server = function(input, output, session) {
       for (month in seq(as.integer(input$teams_start_month), as.integer(input$teams_end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
         
-        
+        current_urls = get_team_links(generation = substr(input$teams_gen, 5, 5), tier = tolower(input$teams_tier), year = year, month = month_str)
+        urls = c(urls, current_urls)
       }
     }
+  
+  df = urls %>%
+    map_dfr(~ read_teams(.))
+  df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d")
+  df = df %>%
+    arrange(names, date)
+  teams_data(df)
+  team_lvls(unique(df$elo))
+  print(team_lvls)
   }
-               )
+  )
   
   # mon input
   output$pokemon = renderUI({
@@ -238,6 +277,7 @@ server = function(input, output, session) {
     updateSelectizeInput(session, "pokemon", choices = unique_pokemon(), selected = NULL, server = TRUE)
   })
   
+  
   selected_data = reactiveVal()
   
   observeEvent(input$pokemon, {
@@ -245,26 +285,43 @@ server = function(input, output, session) {
                     filter(pokemon %in% input$pokemon))
   })
   
+  # teams elo input
+  output$teams_elo = renderUI({
+    selectInput("teams_elo", "Minimum ELO", choices = team_lvls())
+  })
+  
+  # update teams elo input options
+  observe({
+    updateSelectizeInput(session, "teams_elo", choices = team_lvls(), server = TRUE)
+  })
+  
+  teams_filtered = reactiveVal()
+  
+  observeEvent(input$teams_elo, {
+    teams_filtered(teams_data() %>%
+                     filter(elo == input$teams_elo))
+  })
+  
   # usage over time plot
   output$usage_plot = renderPlot({
     req(data())
     req(input$pokemon)
     selected_data = selected_data()
-    color_mapping <- setNames(selected_data$color, selected_data$pokemon)
+    color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
       labs(x = "Time", y = "Usage", color = "Pokémon") +
       theme_minimal() +
-      #ggtitle("Usage of selected Pokemon over time") +
+      ggtitle("Usage over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
   })
   
   output$elo_gap_plot = renderPlot({
-    req(data)
+    req(data())
     req(input$pokemon)
     selected_data = selected_data()
-    color_mapping <- setNames(selected_data$color, selected_data$pokemon)
+    color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
       labs(x = "Time", y = "ELO Gap", color = "Pokémon") +
@@ -272,8 +329,44 @@ server = function(input, output, session) {
       ggtitle("Difference in Usage (Highest minus lowest) over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
-    
   })
+
+
+# excluding weatherless and multiweather for now)
+# add handling for all weatherless
+output$weather_plot = renderPlot({
+  req(teams_data())
+  req(input$teams_elo)
+  teams_filtered = teams_filtered()
+  teams_filtered %>%
+    filter(names %in% c("rain", "sun", "sand", "hail")) %>%
+    ggplot(aes(x = date, y = percents, color = names, group = names)) +
+    geom_line(linewidth = 1.2) +
+    labs(x = "Time", y = "Usage", color = "Weather") +
+    theme_minimal() + 
+    ggtitle("Usage over time") + 
+    scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+    scale_color_manual(values = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8"),
+                       labels = c("Rain", "Sun", "Sand", "Hail"))
+})
+
+output$style_plot = renderPlot({
+  req(teams_data())
+  req(input$teams_elo)
+  teams_filtered = teams_filtered()
+  teams_filtered %>%
+    filter(names %in% c("hyperoffense", "offense", "balance", "semistall", "stall")) %>%
+    mutate(names = factor(names, levels = c("hyperoffense", "offense", "balance", "semistall", "stall"))) %>% 
+    ggplot(aes(x = date, y = percents, color = names, group = names)) +
+    geom_line(linewidth = 1.2) +
+    labs(x = "Time", y = "Usage", color = "Playstyle") +
+    theme_minimal() + 
+    ggtitle("Usage over time") + 
+    scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+    scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#9370DB", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
+                       labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall"))
+})
+
 }
 
 # run app
