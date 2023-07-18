@@ -10,6 +10,9 @@ library(shinythemes)
 # fix usage plot updating—-when changing dates etc. after already selecting
 # pokemon it doesn't update
 # consider tweaking the purple in the playstyle graph
+# metagame graphs like won't display the first time you do 0 elo, you have to
+# click another elo and then back to 0???
+# consistent axis scaling?
 
 source("colormatch.R")
 
@@ -39,7 +42,7 @@ read_teams = function(file) {
   df = df %>% filter(names %in% selected_vals)
   df$year = str_extract(file, "\\d{4}(?=\\-)")
   df$month = str_extract(file, "(?<=\\-)\\d{2}")
-  df$elo = str_trim(str_extract(file, "(?<=-)\\d+(?=\\.txt)"))
+  df$elo = str_extract(file, "(?<=-)\\d+(?=\\.txt)")
   
   return(df)
 }
@@ -263,7 +266,11 @@ server = function(input, output, session) {
     arrange(names, date)
   teams_data(df)
   team_lvls(unique(df$elo))
-  print(team_lvls)
+  
+  # teams elo input
+  output$teams_elo = renderUI({
+    selectInput("teams_elo", "Minimum ELO", choices = team_lvls())
+  })
   }
   )
   
@@ -285,21 +292,13 @@ server = function(input, output, session) {
                     filter(pokemon %in% input$pokemon))
   })
   
-  # teams elo input
-  output$teams_elo = renderUI({
-    selectInput("teams_elo", "Minimum ELO", choices = team_lvls())
-  })
-  
-  # update teams elo input options
-  observe({
-    updateSelectizeInput(session, "teams_elo", choices = team_lvls(), server = TRUE)
-  })
-  
   teams_filtered = reactiveVal()
   
   observeEvent(input$teams_elo, {
-    teams_filtered(teams_data() %>%
-                     filter(elo == input$teams_elo))
+    tf <- teams_data() %>%
+      filter(elo == input$teams_elo)
+    teams_filtered(tf)
+    # print(tf) # looks like actual data is fine so idk
   })
   
   # usage over time plot
@@ -340,6 +339,7 @@ output$weather_plot = renderPlot({
   teams_filtered = teams_filtered()
   teams_filtered %>%
     filter(names %in% c("rain", "sun", "sand", "hail")) %>%
+    mutate(names = factor(names, levels = c("rain", "sun", "sand", "hail"))) %>%
     ggplot(aes(x = date, y = percents, color = names, group = names)) +
     geom_line(linewidth = 1.2) +
     labs(x = "Time", y = "Usage", color = "Weather") +
