@@ -2,17 +2,23 @@
 library(tidyverse)
 library(shiny)
 library(shinythemes)
+library(scales)
 
 # TODO
 # test gen 6 data reading
 # add links
-# update header, fonts, colors, change some formatting on plot
+# update fonts, change some formatting on plot
 # fix usage plot updating—-when changing dates etc. after already selecting
 # pokemon it doesn't update
+# moreover if you change e.g. gen after selecting pokemon, it will just crash
+# (trying to run color match on mons that aren't in data)
 # consider tweaking the purple in the playstyle graph
 # metagame graphs like won't display the first time you do 0 elo, you have to
 # click another elo and then back to 0???
-# consistent axis scaling?
+# axis scaling?
+# message for when there's no weather teams
+# elo gap--handling for when a mon is not present in highest elo
+# add reactive title for monthly usage summary
 
 source("colormatch.R")
 
@@ -66,7 +72,7 @@ get_team_links = function(generation, tier, year, month) {
   return(paste0(url, links))
 }
 
-# function to retrieve URLs for usage
+# get links for usage data
 get_data_links = function(generation, tier, year, month) {
   
   url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
@@ -93,6 +99,27 @@ get_data_links = function(generation, tier, year, month) {
   
   ans = c(links[index_zero], links[index_max])
   return(paste0(url, ans))
+}
+
+# modified for monthly summary (all elo)
+get_sum_usage_links = function(generation, tier, year, month) {
+  
+  url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
+  
+  webpage = read_html(url)
+  all_links = webpage %>%
+    html_nodes("a") %>%
+    html_attr("href")
+  
+  if(generation == "6" & (year < 2017 | (year == 2017 & as.integer(month) <= 6))){
+    pattern = paste0("^", tier, "-\\d+\\.txt$")
+  } else {
+    pattern = paste0("^gen", generation, tier, "-\\d+\\.txt$")
+  }
+  
+  links = all_links[stringr::str_detect(all_links, pattern)]
+  
+  return(paste0(url, links))
 }
 
 # calculate elo gap
@@ -203,8 +230,26 @@ ui = navbarPage(
   tabPanel("Monthly Summary",
            fluidPage(
              sidebarLayout(
-               sidebarPanel(),
-               mainPanel()
+               sidebarPanel(
+                 selectInput("sum_gen", "Generation", choices = paste0("Gen ", 1:9)),
+                 selectInput("sum_tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU"),
+                             selected = "OU"),
+                 fluidRow(
+                   column(width = 6, 
+                          selectInput("sum_month", "Month", choices = months)),
+                   column(width = 6,
+                          numericInput("sum_year", "Year", 2023))
+                 ),
+                 uiOutput("sum_elo")
+               ),
+               mainPanel(
+                 tabsetPanel(
+                   tabPanel("Usage", plotOutput("sum_usage_plot")),
+                   # elo gap? that would be weird to implement with elo selection though
+                   tabPanel("Weather", plotOutput("sum_weather_plot")),
+                   tabPanel("Playstyle", plotOutput("sum_style_plot"))
+                 )
+               )
              )
            )),
   tabPanel("About")
@@ -219,13 +264,17 @@ server = function(input, output, session) {
   teams_data = reactiveVal()
   team_lvls = reactiveVal()
   
+  sum_usage_data = reactiveVal()
+  sum_teams_data = reactiveVal()
+  sum_lvls = reactiveVal()
+  
   # read data when user changes gen/tier/elo/time input (ELO removed for now, need to fix)
   observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
     urls = list()
     for (year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
-    
+        
         current_urls = get_data_links(generation = substr(input$generation, 5, 5), tier = tolower(input$tier), year = year, month = month_str)
         
         urls = c(urls, current_urls)
@@ -248,6 +297,7 @@ server = function(input, output, session) {
     unique_pokemon(unique(df$pokemon))
   })
   
+  # teams
   observeEvent(list(input$teams_gen, input$teams_tier, input$teams_start_month, input$teams_start_year, input$teams_end_month, input$teams_end_year), {
     urls = list()
     for (year in seq(as.integer(input$teams_start_year), as.integer(input$teams_end_year))) {
@@ -274,6 +324,37 @@ server = function(input, output, session) {
   }
   )
   
+  # monthly summary
+  observeEvent(list(input$sum_gen, input$sum_tier, input$sum_year, input$sum_month), {
+  
+    usage_urls = get_sum_usage_links(generation = substr(input$sum_gen, 5, 5), tier = tolower(input$sum_tier), year = input$sum_year, month = input$sum_month)
+    teams_urls = get_team_links(generation = substr(input$sum_gen, 5, 5), tier = tolower(input$sum_tier), year = input$sum_year, month = input$sum_month)
+    print(teams_urls)
+    
+    usage_df = usage_urls %>%
+      map_dfr(~ read_usage(.))
+    colnames(usage_df) = c("pokemon", "usage", "year", "month", "elo")
+    usage_df$usage = gsub("%", "", usage_df$usage)
+    usage_df$usage = as.numeric(usage_df$usage)
+    usage_df$date = as.Date(paste(usage_df$year, usage_df$month, "01", sep = "-"), format = "%Y-%m-%d")
+    usage_df = usage_df %>%
+      arrange(pokemon, date)
+    sum_usage_data(usage_df)
+    
+    teams_df = teams_urls %>%
+      map_dfr(~ read_teams(.))
+    teams_df$date = as.Date(paste(teams_df$year, teams_df$month, "01", sep = "-"), format = "%Y-%m-%d")
+    teams_df = teams_df %>%
+      arrange(names, date)
+    sum_teams_data(teams_df)
+    
+    sum_lvls(unique(teams_df$elo))
+    
+    output$sum_elo = renderUI({
+      selectInput("sum_elo", "Minimum ELO", choices = sum_lvls())
+    })
+  })
+  
   # mon input
   output$pokemon = renderUI({
     selectizeInput("pokemon", "Select Pokémon", choices = unique_pokemon(), multiple = TRUE, options = list(maxItems = 5))
@@ -295,11 +376,25 @@ server = function(input, output, session) {
   teams_filtered = reactiveVal()
   
   observeEvent(input$teams_elo, {
-    tf <- teams_data() %>%
+    tf = teams_data() %>%
       filter(elo == input$teams_elo)
     teams_filtered(tf)
     # print(tf) # looks like actual data is fine so idk
   })
+  
+  sum_teams_filtered = reactiveVal()
+  sum_usage_filtered = reactiveVal()
+  
+  observeEvent(input$sum_elo, {
+    stf = sum_teams_data() %>%
+      filter(elo == input$sum_elo)
+    sum_teams_filtered(stf)
+    
+    suf = sum_usage_data() %>%
+      filter(elo == input$sum_elo)
+    sum_usage_filtered(suf)
+  })
+  
   
   # usage over time plot
   output$usage_plot = renderPlot({
@@ -325,13 +420,13 @@ server = function(input, output, session) {
       geom_line(linewidth = 1.2) +
       labs(x = "Time", y = "ELO Gap", color = "Pokémon") +
       theme_minimal() +
-      ggtitle("Difference in Usage (Highest minus lowest) over time") +
+      ggtitle("Difference in Usage (Highest ELO minus all) over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
   })
 
 
-# excluding weatherless and multiweather for now)
+# excluding weatherless and multiweather for now
 # add handling for all weatherless
 output$weather_plot = renderPlot({
   req(teams_data())
@@ -366,6 +461,33 @@ output$style_plot = renderPlot({
     scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#9370DB", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
                        labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall"))
 })
+
+output$sum_usage_plot = renderPlot({
+  req(sum_usage_data())
+  req(input$sum_elo)
+  sum_usage_filtered = sum_usage_filtered()
+  sum_usage_filtered = sum_usage_filtered %>%
+    filter(usage >= 4.52)
+  
+  # ordering the data by usage
+  sum_usage_filtered = sum_usage_filtered[order(sum_usage_filtered$usage),]
+  sum_usage_filtered$rank = nrow(sum_usage_filtered):1
+  sum_usage_filtered$pokemon_ranked = paste(sum_usage_filtered$rank, ". ", sum_usage_filtered$pokemon)
+  
+  # creating the bar chart
+  ggplot(sum_usage_filtered, aes(x = reorder(pokemon_ranked, usage), y = usage, fill = usage)) +
+    geom_bar(stat = 'identity') +
+    scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 54.52) +
+    coord_flip() +
+    theme_minimal() +
+    theme(axis.text.y = element_text(hjust = 1)) +
+    xlab('Pokemon') +
+    ylab('Usage') +
+    geom_text(aes(label = paste0(sprintf("%.2f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black') +
+    ggtitle('Usage Ranking')
+  
+})
+
 
 }
 
