@@ -19,6 +19,7 @@ library(scales)
 # message for when there's no weather teams
 # elo gap--handling for when a mon is not present in highest elo
 # add reactive title for monthly usage summary
+# fix size or placement of percents on bar chart
 
 source("colormatch.R")
 
@@ -240,6 +241,7 @@ ui = navbarPage(
                    column(width = 6,
                           numericInput("sum_year", "Year", 2023))
                  ),
+                 selectInput("chart_type", "Chart Type", choices = c("Bar", "Pie")),
                  uiOutput("sum_elo")
                ),
                mainPanel(
@@ -329,7 +331,6 @@ server = function(input, output, session) {
   
     usage_urls = get_sum_usage_links(generation = substr(input$sum_gen, 5, 5), tier = tolower(input$sum_tier), year = input$sum_year, month = input$sum_month)
     teams_urls = get_team_links(generation = substr(input$sum_gen, 5, 5), tier = tolower(input$sum_tier), year = input$sum_year, month = input$sum_month)
-    print(teams_urls)
     
     usage_df = usage_urls %>%
       map_dfr(~ read_usage(.))
@@ -382,17 +383,18 @@ server = function(input, output, session) {
     # print(tf) # looks like actual data is fine so idk
   })
   
-  sum_teams_filtered = reactiveVal()
-  sum_usage_filtered = reactiveVal()
-  
-  observeEvent(input$sum_elo, {
-    stf = sum_teams_data() %>%
-      filter(elo == input$sum_elo)
-    sum_teams_filtered(stf)
-    
+  sum_usage_filtered = reactive({
+    req(sum_usage_data(), input$sum_elo)
     suf = sum_usage_data() %>%
       filter(elo == input$sum_elo)
-    sum_usage_filtered(suf)
+    suf
+  })
+  
+  sum_teams_filtered = reactive({
+    req(sum_teams_data(), input$sum_elo)
+    stf = sum_teams_data() %>%
+      filter(elo == input$sum_elo)
+    stf
   })
   
   
@@ -463,31 +465,94 @@ output$style_plot = renderPlot({
 })
 
 output$sum_usage_plot = renderPlot({
-  req(sum_usage_data())
-  req(input$sum_elo)
+  req(sum_usage_filtered())
   sum_usage_filtered = sum_usage_filtered()
   sum_usage_filtered = sum_usage_filtered %>%
     filter(usage >= 4.52)
   
-  # ordering the data by usage
   sum_usage_filtered = sum_usage_filtered[order(sum_usage_filtered$usage),]
   sum_usage_filtered$rank = nrow(sum_usage_filtered):1
   sum_usage_filtered$pokemon_ranked = paste(sum_usage_filtered$rank, ". ", sum_usage_filtered$pokemon)
   
-  # creating the bar chart
   ggplot(sum_usage_filtered, aes(x = reorder(pokemon_ranked, usage), y = usage, fill = usage)) +
-    geom_bar(stat = 'identity') +
+    geom_bar(stat = "identity") +
     scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 54.52) +
     coord_flip() +
     theme_minimal() +
     theme(axis.text.y = element_text(hjust = 1)) +
-    xlab('Pokemon') +
-    ylab('Usage') +
+    labs(y = "Usage") +
     geom_text(aes(label = paste0(sprintf("%.2f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black') +
-    ggtitle('Usage Ranking')
+    ggtitle("Usage Ranking")
   
 })
 
+# figure out colors
+output$sum_weather_plot = renderPlot({
+  req(sum_teams_filtered())
+  sum_teams_filtered = sum_teams_filtered()
+  sum_teams_filtered = sum_teams_filtered %>%
+    filter(names %in% c("rain", "sun", "sand", "hail", "weatherless", "multiweather")) %>%
+    mutate(names = factor(names, levels = c("rain", "sun", "sand", "hail", "weatherless", "multiweather")))
+  
+  weather_color_mapping = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8", "weatherless" = "#cccccf", "multiweather" = "#8c8c8f")
+  weather_label_mapping = c("rain" = "Rain", "sun" = "Sun", "sand" = "Sand", "hail" = "Hail", "weatherless" = "None", "multiweather" = "Multiple")
+  
+  if (input$chart_type == "Bar") {
+    ggplot(sum_teams_filtered, aes(x = names, y = percents, fill = names)) +
+      geom_bar(stat = "identity") + 
+      labs(y = "Usage", fill = "Weather") +
+      theme_minimal() +
+      ggtitle("Weather Team Usage") + 
+      scale_fill_manual(values = weather_color_mapping,
+                        labels = weather_label_mapping, drop = FALSE) 
+  }
+  
+  else {
+    ggplot(sum_teams_filtered, aes(x = "", y = percents, fill = names)) +
+      geom_bar(stat = "identity", width = 1) + 
+      coord_polar("y", start=0) +
+      labs(x = NULL, y = NULL, fill = "Weather") +
+      theme_void() +
+      theme(legend.position = "right") +
+      ggtitle("Weather Team Usage") + 
+      scale_fill_manual(values = weather_color_mapping,
+                        labels = weather_label_mapping, drop = FALSE) +
+      geom_text(aes(label = sprintf("%.2f%%", percents)), position = position_stack(vjust = 0.5))
+  }
+})
+
+output$sum_style_plot = renderPlot({
+  req(sum_teams_filtered())
+  sum_teams_filtered = sum_teams_filtered()
+  sum_teams_filtered = sum_teams_filtered %>%
+    filter(names %in% c("hyperoffense", "offense", "balance", "semistall", "stall")) %>%
+    mutate(names = factor(names, levels = c("hyperoffense", "offense", "balance", "semistall", "stall")))
+  
+  style_color_mapping = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#9370DB", "semistall" = "#abd9e9", "stall" = "#2c7bb6")
+  style_label_mapping = c("hyperoffense" = "Hyperoffense", "offense" = "Offense", "balance" = "Balance", "semistall" = "Semistall", "stall" = "Stall")
+  
+  if (input$chart_type == "Bar") {
+    ggplot(sum_teams_filtered, aes(x = names, y = percents, fill = names)) +
+      geom_bar(stat = "identity") +
+      labs(y = "Usage", fill = "Playstyle") + 
+      theme_minimal() + 
+      ggtitle("Team Style Usage") +
+      scale_fill_manual(values = style_color_mapping, labels = style_label_mapping,
+                        drop = FALSE)
+  }
+  else {
+    ggplot(sum_teams_filtered, aes(x = "", y = percents, fill = names)) +
+      geom_bar(stat = "identity", width = 1) + 
+      coord_polar("y", start=0) +
+      labs(x = NULL, y = NULL, fill = "Playstyle") +
+      theme_void() +
+      theme(legend.position = "right") +
+      ggtitle("Team Style Usage") + 
+      scale_fill_manual(values = style_color_mapping,
+                        labels = style_label_mapping, drop = FALSE) +
+      geom_text(aes(label = sprintf("%.2f%%", percents)), position = position_stack(vjust = 0.5))
+  }
+})
 
 }
 
