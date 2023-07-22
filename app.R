@@ -297,6 +297,10 @@ server = function(input, output, session) {
       match_colors() 
     data(df)
     unique_pokemon(unique(df$pokemon))
+    
+    output$pokemon = renderUI({
+      selectizeInput("pokemon", "Select Pokémon", choices = unique_pokemon(), multiple = TRUE, options = list(maxItems = 5))
+    })
   })
   
   # teams
@@ -356,32 +360,21 @@ server = function(input, output, session) {
     })
   })
   
-  # mon input
-  output$pokemon = renderUI({
-    selectizeInput("pokemon", "Select Pokémon", choices = unique_pokemon(), multiple = TRUE, options = list(maxItems = 5))
+  
+  selected_data = reactive({
+   req(data(), input$pokemon)
+    df = data() %>%
+      filter(pokemon %in% input$pokemon)
+    df
   })
   
-  # update mon input options
-  observe({
-    updateSelectizeInput(session, "pokemon", choices = unique_pokemon(), selected = NULL, server = TRUE)
-  })
-  
-  
-  selected_data = reactiveVal()
-  
-  observeEvent(input$pokemon, {
-    selected_data(data() %>%
-                    filter(pokemon %in% input$pokemon))
-  })
-  
-  teams_filtered = reactiveVal()
-  
-  observeEvent(input$teams_elo, {
+  teams_filtered = reactive({
+    req(teams_data(), input$teams_elo)
     tf = teams_data() %>%
       filter(elo == input$teams_elo)
-    teams_filtered(tf)
-    # print(tf) # looks like actual data is fine so idk
+    tf
   })
+
   
   sum_usage_filtered = reactive({
     req(sum_usage_data(), input$sum_elo)
