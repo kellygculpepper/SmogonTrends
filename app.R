@@ -4,14 +4,17 @@ library(shiny)
 library(shinythemes)
 library(scales)
 library(showtext)
+library(ggplot2)
+library(ggrepel)
 
 # TODO
 # test gen 6 data reading & calculate_gap() update
 # add links
-# fix size or placement of percents on bar chart
-# get rid of multiweather probably
 # additional options (elo/pokemon) resetting even when they don't necc need to--not
 # sure if reasonable fix
+# handling for if a mon reaches 0% in a particular month (and thus is not in the data)?
+# (don't know if there are cases of this)
+# elo selection on usage plot?
 
 source("colormatch.R")
 
@@ -37,7 +40,7 @@ read_teams = function(file) {
   
   df = data.frame(names, percents)
   
-  selected_vals = c("weatherless", "rain", "sun", "sand", "hail", "multiweather", "offense", "hyperoffense", "semistall", "stall", "balance")
+  selected_vals = c("weatherless", "rain", "sun", "sand", "hail", "offense", "hyperoffense", "semistall", "stall", "balance")
   df = df %>% filter(names %in% selected_vals)
   df$year = str_extract(file, "\\d{4}(?=\\-)")
   df$month = str_extract(file, "(?<=\\-)\\d{2}")
@@ -159,12 +162,6 @@ ui = navbarPage(
          .navbar .navbar-nav {
           float: right;
          }
-        
-      #* {
-      #  font-family: 'Lato', sans-serif;
-      #}
-      
-      
     ")
     )
   ),
@@ -200,7 +197,7 @@ ui = navbarPage(
                    plotOutput("usage_plot")
                    
                  )), 
-        tabPanel("ELO Gap", 
+        tabPanel("Elo Gap", 
                  tags$div(
                    style = "margin-top: 20px",
                    plotOutput("elo_gap_plot"))
@@ -272,7 +269,7 @@ ui = navbarPage(
                    tabPanel("Usage", 
                             tags$div(
                               style = "margin-top: 20px;",
-                              plotOutput("sum_usage_plot")
+                              plotOutput("sum_usage_plot", height = 600)
                             )),
                    tabPanel("Weather", 
                             tags$div(
@@ -360,7 +357,7 @@ server = function(input, output, session) {
   
   # teams elo input
   output$teams_elo = renderUI({
-    selectInput("teams_elo", "Minimum ELO", choices = team_lvls())
+    selectInput("teams_elo", "Minimum Elo", choices = team_lvls())
   })
   }
   )
@@ -391,7 +388,7 @@ server = function(input, output, session) {
     sum_lvls(unique(teams_df$elo))
     
     output$sum_elo = renderUI({
-      selectInput("sum_elo", "Minimum ELO", choices = sum_lvls())
+      selectInput("sum_elo", "Minimum Elo", choices = sum_lvls())
     })
   })
   
@@ -448,9 +445,9 @@ server = function(input, output, session) {
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
-      labs(x = "Time", y = "ELO Gap", color = "Pokémon") +
+      labs(x = "Time", y = "Elo Gap", color = "Pokémon") +
       theme_minimal(base_size = 20) +
-      ggtitle("Difference in Usage (Highest ELO minus all) over time") +
+      ggtitle("Difference in Usage (Highest Elo minus all) over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
   })
@@ -508,7 +505,7 @@ output$sum_usage_plot = renderPlot({
   sum_usage_filtered$pokemon_ranked = sprintf("%d. %s", sum_usage_filtered$rank, sum_usage_filtered$pokemon)
   
   ggplot(sum_usage_filtered, aes(x = reorder(pokemon_ranked, usage), y = usage, fill = usage)) +
-    geom_bar(stat = "identity", width = 1, position = position_dodge(width = 1.1)) +
+    geom_bar(stat = "identity", width = 0.9) +
     scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 54.52) +
     coord_flip() +
     theme_void(base_size = 20) +
@@ -525,33 +522,41 @@ output$sum_weather_plot = renderPlot({
   req(sum_teams_filtered())
   sum_teams_filtered = sum_teams_filtered()
   sum_teams_filtered = sum_teams_filtered %>%
-    filter(names %in% c("rain", "sun", "sand", "hail", "weatherless", "multiweather")) %>%
-    mutate(names = factor(names, levels = c("rain", "sun", "sand", "hail", "weatherless", "multiweather")))
+    filter(names %in% c("rain", "sun", "sand", "hail", "weatherless")) %>%
+    mutate(names = factor(names, levels = c("rain", "sun", "sand", "hail", "weatherless")))
   
-  weather_color_mapping = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8", "weatherless" = "#cccccf", "multiweather" = "#8c8c8f")
-  weather_label_mapping = c("rain" = "Rain", "sun" = "Sun", "sand" = "Sand", "hail" = "Hail", "weatherless" = "None", "multiweather" = "Multiple")
+  weather_color_mapping = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8", "weatherless" = "#cccccf")
+  weather_label_mapping = c("rain" = "Rain", "sun" = "Sun", "sand" = "Sand", "hail" = "Hail", "weatherless" = "None")
   
   if (input$chart_type == "Bar") {
     ggplot(sum_teams_filtered, aes(x = names, y = percents, fill = names)) +
       geom_bar(stat = "identity") + 
-      labs(y = "Usage", fill = "Weather", title = "Weather Team Usage",
+      labs(y = "Usage", x = "Weather", title = "Weather Team Usage",
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
       theme_minimal(base_size = 20) +
-      scale_fill_manual(values = weather_color_mapping,
-                        labels = weather_label_mapping, drop = FALSE) 
+      scale_fill_manual(values = weather_color_mapping, drop = FALSE) +
+      scale_x_discrete(labels = weather_label_mapping) +
+      guides(fill = FALSE)
   }
   
   else {
-    ggplot(sum_teams_filtered, aes(x = "", y = percents, fill = names)) +
-      geom_bar(stat = "identity", width = 1) + 
-      coord_polar("y", start=0) +
-      labs(x = NULL, y = NULL, fill = "Weather", title = "Weather Team Usage", 
-           subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      theme_void(base_size = 20) +
-      theme(legend.position = "right") +
+    sum_teams_filtered2 = sum_teams_filtered %>% 
+      mutate(csum = rev(cumsum(rev(percents))), 
+             pos = percents/2 + lead(csum, 1),
+             pos = if_else(is.na(pos), percents/2, pos))
+    
+    ggplot(sum_teams_filtered2, aes(x = "" , y = percents, fill = fct_inorder(names))) +
+      geom_col(width = 1) +
+      coord_polar(theta = "y") +
       scale_fill_manual(values = weather_color_mapping,
                         labels = weather_label_mapping, drop = FALSE) +
-      geom_text(aes(label = paste0(round(percents), "%")), position = position_stack(vjust = 0.5))
+      geom_label_repel(data = sum_teams_filtered2,
+                       aes(y = pos, label = paste0(round(percents), "%")),
+                       size = 6.5, nudge_x = 0.7, show.legend = FALSE, box.padding = 0.1, label.size = 0,
+                       color = "white", segment.color = "black") +
+      theme_void(base_size = 20) +
+      labs(x = NULL, y = NULL, fill = "Weather", title = "Weather Team Usage", 
+           subtitle = paste0(input$sum_month, "-", input$sum_year))
   }
   }
 })
@@ -573,22 +578,30 @@ output$sum_style_plot = renderPlot({
   if (input$chart_type == "Bar") {
     ggplot(sum_teams_filtered, aes(x = names, y = percents, fill = names)) +
       geom_bar(stat = "identity") +
-      labs(y = "Usage", fill = "Playstyle",  title = "Team Style Usage", subtitle = paste0(input$sum_month, "-", input$sum_year)) + 
+      labs(y = "Usage", x = "Playstyle",  title = "Team Style Usage", subtitle = paste0(input$sum_month, "-", input$sum_year)) + 
       theme_minimal(base_size = 20) + 
-      scale_fill_manual(values = style_color_mapping, labels = style_label_mapping,
-                        drop = FALSE)
+      scale_fill_manual(values = style_color_mapping, drop = FALSE) +
+      scale_x_discrete(labels = style_label_mapping) +
+      guides(fill = FALSE)
   }
+  
   else {
-    ggplot(sum_teams_filtered, aes(x = "", y = percents, fill = names)) +
-      geom_bar(stat = "identity", width = 1) + 
-      coord_polar("y", start=0) +
-      labs(x = NULL, y = NULL, fill = "Playstyle", title = "Team Style Usage",
-           subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      theme_void(base_size = 20) +
-      theme(legend.position = "right") +
+    sum_teams_filtered2 = sum_teams_filtered %>% 
+      mutate(csum = rev(cumsum(rev(percents))), 
+             pos = percents/2 + lead(csum, 1),
+             pos = if_else(is.na(pos), percents/2, pos))
+    
+    ggplot(sum_teams_filtered2, aes(x = "" , y = percents, fill = fct_inorder(names))) +
+      geom_col(width = 1) +
+      coord_polar(theta = "y") +
       scale_fill_manual(values = style_color_mapping,
                         labels = style_label_mapping, drop = FALSE) +
-      geom_text(aes(label = paste0(round(percents), "%")), position = position_stack(vjust = 0.5))
+      geom_label_repel(data = sum_teams_filtered2,
+                       aes(y = pos, label = paste0(round(percents), "%")), color = "white", segment.color = "black",
+                       size = 6.5, nudge_x = 0.7, show.legend = FALSE, box.padding = 0.1, label.size = 0) +
+      theme_void(base_size = 20) +
+      labs(x = NULL, y = NULL, fill = "Playstyle", title = "Team Style Usage", 
+           subtitle = paste0(input$sum_month, "-", input$sum_year))
   }
 })
 
