@@ -3,14 +3,13 @@ library(tidyverse)
 library(shiny)
 library(shinythemes)
 library(scales)
+library(showtext)
 
 # TODO
 # test gen 6 data reading & calculate_gap() update
 # add links
-# update fonts, change some formatting on plot (also move plots down)
-# axis scaling?
-# weather team message formatting/placement
 # fix size or placement of percents on bar chart
+# get rid of multiweather probably
 # additional options (elo/pokemon) resetting even when they don't necc need to--not
 # sure if reasonable fix
 
@@ -132,6 +131,9 @@ calculate_gap = function(df) {
 
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
+font_add_google("Lato", "lato")
+showtext_auto()
+
 # UI
 ui = navbarPage(
     title = tags$div(
@@ -144,6 +146,7 @@ ui = navbarPage(
     tags$link(rel = "preconnect", href = "https://fonts.googleapis.com"),
     tags$link(rel = "preconnect", href = "https://fonts.gstatic.com", crossorigin = ""),
     tags$link(href = "https://fonts.googleapis.com/css2?family=Bangers&display=swap", rel = "stylesheet"),
+    tags$link(href = "https://fonts.googleapis.com/css2?family=Lato&display=swap", rel = "stylesheet"),
     
     tags$style(
       HTML("
@@ -155,8 +158,14 @@ ui = navbarPage(
         
          .navbar .navbar-nav {
           float: right;
-        }
-      ")
+         }
+        
+      #* {
+      #  font-family: 'Lato', sans-serif;
+      #}
+      
+      
+    ")
     )
   ),
   
@@ -185,8 +194,17 @@ ui = navbarPage(
     
     mainPanel(
       tabsetPanel(
-        tabPanel("Usage", plotOutput("usage_plot")), 
-        tabPanel("ELO Gap", plotOutput("elo_gap_plot")) 
+        tabPanel("Usage", 
+                 tags$div(
+                   style = "margin-top: 20px;",
+                   plotOutput("usage_plot")
+                   
+                 )), 
+        tabPanel("ELO Gap", 
+                 tags$div(
+                   style = "margin-top: 20px",
+                   plotOutput("elo_gap_plot"))
+        )
       )
     )
   )
@@ -217,9 +235,17 @@ ui = navbarPage(
                ),
                mainPanel(
                  tabsetPanel(
-                   tabPanel("Weather", textOutput("teams_msg"),
-                            plotOutput("weather_plot")), 
-                   tabPanel("Playstyle", plotOutput("style_plot")) 
+                   tabPanel("Weather", 
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              textOutput("teams_msg"),
+                              plotOutput("weather_plot")
+                            )),
+                   tabPanel("Playstyle", 
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              plotOutput("style_plot")
+                            ))
                  )
                )
              )
@@ -243,12 +269,22 @@ ui = navbarPage(
                ),
                mainPanel(
                  tabsetPanel(
-                   tabPanel("Usage", plotOutput("sum_usage_plot")),
-                   # elo gap? that would be weird to implement with elo selection though
+                   tabPanel("Usage", 
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              plotOutput("sum_usage_plot")
+                            )),
                    tabPanel("Weather", 
-                            textOutput("sum_msg"),
-                            plotOutput("sum_weather_plot")),
-                   tabPanel("Playstyle", plotOutput("sum_style_plot"))
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              textOutput("sum_msg"),
+                              plotOutput("sum_weather_plot")
+                            )),
+                   tabPanel("Playstyle", 
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              plotOutput("sum_style_plot")
+                            ))
                  )
                )
              )
@@ -399,7 +435,7 @@ server = function(input, output, session) {
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
       labs(x = "Time", y = "Usage", color = "Pokémon") +
-      theme_minimal() +
+      theme_minimal(base_size = 20) +
       ggtitle("Usage over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
@@ -413,7 +449,7 @@ server = function(input, output, session) {
     ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
       labs(x = "Time", y = "ELO Gap", color = "Pokémon") +
-      theme_minimal() +
+      theme_minimal(base_size = 20) +
       ggtitle("Difference in Usage (Highest ELO minus all) over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
       scale_color_manual(values = color_mapping)
@@ -433,7 +469,7 @@ output$weather_plot = renderPlot({
     ggplot(aes(x = date, y = percents, color = names, group = names)) +
     geom_line(linewidth = 1.2) +
     labs(x = "Time", y = "Usage", color = "Weather", title = "Usage over time") +
-    theme_minimal() + 
+    theme_minimal(base_size = 20) + 
     scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
     scale_color_manual(values = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8"),
                        labels = c("Rain", "Sun", "Sand", "Hail"))
@@ -454,7 +490,7 @@ output$style_plot = renderPlot({
     ggplot(aes(x = date, y = percents, color = names, group = names)) +
     geom_line(linewidth = 1.2) +
     labs(x = "Time", y = "Usage", color = "Playstyle") +
-    theme_minimal() + 
+    theme_minimal(base_size = 20) + 
     ggtitle("Usage over time") + 
     scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
     scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#E0B0D5", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
@@ -472,14 +508,14 @@ output$sum_usage_plot = renderPlot({
   sum_usage_filtered$pokemon_ranked = sprintf("%d. %s", sum_usage_filtered$rank, sum_usage_filtered$pokemon)
   
   ggplot(sum_usage_filtered, aes(x = reorder(pokemon_ranked, usage), y = usage, fill = usage)) +
-    geom_bar(stat = "identity") +
+    geom_bar(stat = "identity", width = 1, position = position_dodge(width = 1.1)) +
     scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 54.52) +
     coord_flip() +
-    theme_void() +
+    theme_void(base_size = 20) +
     theme(axis.text.y = element_text(hjust = 1)) +
     labs(x = NULL, y = "Usage", title = paste0("Usage of ", input$sum_gen, " ", input$sum_tier, " Mons"),
          subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-    geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black') +
+    geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 6) +
     guides(fill = FALSE)
   
 })
@@ -500,7 +536,7 @@ output$sum_weather_plot = renderPlot({
       geom_bar(stat = "identity") + 
       labs(y = "Usage", fill = "Weather", title = "Weather Team Usage",
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      theme_minimal() +
+      theme_minimal(base_size = 20) +
       scale_fill_manual(values = weather_color_mapping,
                         labels = weather_label_mapping, drop = FALSE) 
   }
@@ -511,7 +547,7 @@ output$sum_weather_plot = renderPlot({
       coord_polar("y", start=0) +
       labs(x = NULL, y = NULL, fill = "Weather", title = "Weather Team Usage", 
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      theme_void() +
+      theme_void(base_size = 20) +
       theme(legend.position = "right") +
       scale_fill_manual(values = weather_color_mapping,
                         labels = weather_label_mapping, drop = FALSE) +
@@ -538,7 +574,7 @@ output$sum_style_plot = renderPlot({
     ggplot(sum_teams_filtered, aes(x = names, y = percents, fill = names)) +
       geom_bar(stat = "identity") +
       labs(y = "Usage", fill = "Playstyle",  title = "Team Style Usage", subtitle = paste0(input$sum_month, "-", input$sum_year)) + 
-      theme_minimal() + 
+      theme_minimal(base_size = 20) + 
       scale_fill_manual(values = style_color_mapping, labels = style_label_mapping,
                         drop = FALSE)
   }
@@ -548,7 +584,7 @@ output$sum_style_plot = renderPlot({
       coord_polar("y", start=0) +
       labs(x = NULL, y = NULL, fill = "Playstyle", title = "Team Style Usage",
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      theme_void() +
+      theme_void(base_size = 20) +
       theme(legend.position = "right") +
       scale_fill_manual(values = style_color_mapping,
                         labels = style_label_mapping, drop = FALSE) +
