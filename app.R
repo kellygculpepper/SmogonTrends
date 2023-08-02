@@ -3,9 +3,8 @@ library(tidyverse)
 library(shiny)
 library(shinythemes)
 library(scales)
-library(showtext)
-library(ggplot2)
 library(ggrepel)
+
 
 # TODO
 # test gen 6 data reading & calculate_gap() update
@@ -133,9 +132,6 @@ calculate_gap = function(df) {
 
 
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
-
-font_add_google("Lato", "lato")
-showtext_auto()
 
 # UI
 ui = navbarPage(
@@ -286,7 +282,16 @@ ui = navbarPage(
                )
              )
            )),
-  tabPanel("About")
+  tabPanel("About",
+           fluidRow(
+             column(width = 12,
+                    h2("About SmogonTrends"),
+                    p("SmogonTrends allows users to visualize usage and metagame data from Pokémon Showdown, a popular online battle simulator.
+                      This app was developed by Kelly Culpepper using the R Shiny framework."),
+                    p("The primary data source for this project is ", a("Smogon.", href = "https://www.smogon.com/stats/"), " Additional data is sourced from ", a("pokemonData,", href = "https://github.com/lgreski/pokemonData"), " authored by lgreski, and ", a("Bulbapedia.", href = "https://bulbagarden.net/")),
+                    p("The full source code for this app is available on ", a("Github.", href = "https://github.com/kellygculpepper/SmogonTrends"), " Feel free to provide feedback or report any bugs via the Issues section.")
+             )
+           ))
 )
 
 # Server
