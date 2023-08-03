@@ -4,16 +4,18 @@ library(shiny)
 library(shinythemes)
 library(scales)
 library(ggrepel)
+library(showtext)
 
+showtext_auto()
 
 # TODO
 # test gen 6 data reading & calculate_gap() update
-# add links
 # additional options (elo/pokemon) resetting even when they don't necc need to--not
 # sure if reasonable fix
 # handling for if a mon reaches 0% in a particular month (and thus is not in the data)?
 # (don't know if there are cases of this)
 # elo selection on usage plot?
+# !!! elo levels changing throughout the time period
 
 source("colormatch.R")
 
@@ -120,14 +122,20 @@ get_sum_usage_links = function(generation, tier, year, month) {
 # calculate elo gap
 # do we need handling for if a mon is listed in one elo's data but not the other?
 calculate_gap = function(df) {
-  df %>%
-    group_by(pokemon, year, month) %>%
+  df = df %>%
+    group_by(date) %>%
+    mutate(max_elo_in_group = max(elo)) %>%
+    filter(elo == 0 | elo == max_elo_in_group) %>%
+    select(-max_elo_in_group)
+  
+    df %>% 
+      group_by(pokemon, date) %>%
     mutate(
       elo_gap = ifelse(any(elo != 0), usage[elo != 0] - usage[elo == 0], usage[elo == 0] - 0)
     ) %>%
     ungroup() %>%
     filter(elo == 0) %>%
-    select(pokemon, year, month, usage, elo_gap)
+    select(pokemon, date, usage, elo_gap, color)
 }
 
 
@@ -182,7 +190,8 @@ ui = navbarPage(
         column(width = 6,
                numericInput("end_year", "End Year", 2023))
       ),
-      uiOutput("pokemon")
+      uiOutput("pokemon"),
+      uiOutput("usage_elo")
     ),
     
     mainPanel(
@@ -299,6 +308,7 @@ server = function(input, output, session) {
   
   data = reactiveVal()
   unique_pokemon = reactiveVal()
+  usage_lvls = reactiveVal()
   
   teams_data = reactiveVal()
   team_lvls = reactiveVal()
@@ -314,7 +324,7 @@ server = function(input, output, session) {
       for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         month_str = ifelse(month < 10, paste0("0", month), toString(month))
         
-        current_urls = get_data_links(generation = substr(input$generation, 5, 5), tier = tolower(input$tier), year = year, month = month_str)
+        current_urls = get_sum_usage_links(generation = substr(input$generation, 5, 5), tier = tolower(input$tier), year = year, month = month_str)
         
         urls = c(urls, current_urls)
       }
@@ -326,8 +336,8 @@ server = function(input, output, session) {
     colnames(df) = c("pokemon", "usage", "year", "month", "elo")
     df$usage = gsub("%", "", df$usage)
     df$usage = as.numeric(df$usage)
-    df = df %>%
-      calculate_gap()
+    #df = df %>%
+     # calculate_gap()
     df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
     df = df %>%
       arrange(pokemon, date) %>% # sort so it will graph correctly
@@ -337,6 +347,12 @@ server = function(input, output, session) {
     
     output$pokemon = renderUI({
       selectizeInput("pokemon", "Select Pokémon", choices = unique_pokemon(), multiple = TRUE, options = list(maxItems = 5))
+    })
+    
+    usage_lvls(unique(df$elo))
+    
+    output$usage_elo = renderUI({
+      selectInput("usage_elo", "Minimum Elo", choices = usage_lvls())
     })
   })
   
@@ -433,6 +449,8 @@ server = function(input, output, session) {
     req(data())
     req(input$pokemon)
     selected_data = selected_data()
+    selected_data = selected_data %>%
+      filter(elo == input$usage_elo)
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
@@ -447,6 +465,8 @@ server = function(input, output, session) {
     req(data())
     req(input$pokemon)
     selected_data = selected_data()
+    selected_data = selected_data %>%
+      calculate_gap()
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
