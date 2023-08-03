@@ -3,7 +3,7 @@ SmogonTrends
 
 [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
 
-This project allows users to visualize trends in Pokémon Showdown data over time. Current functionality includes visualizing usage rates, difference between high vs all Elo usage, weather, and team styles, as well as monthly summaries. The app will ultimately be hosted online.
+This project allows users to visualize trends in Pokémon Showdown data over time. Current functionality includes visualizing usage rates, difference between high vs all Elo usage, weather, and team styles, as well as monthly summaries. The app is hosted online [here](https://kculpepper.shinyapps.io/SmogonTrends/).
 
 Data
 ----
