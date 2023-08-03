@@ -11,4 +11,4 @@ Usage data is sourced from [Smogon](https://www.smogon.com/stats/). Additionally
 
 Installation and Usage
 ----------------------
-To run the app locally, clone this repository and run app.R. This app requires the libraries `tidyverse`, `shiny`, `shinythemes`, `scales`, `ggrepel`, `magrittr`, and `purrr`. 
+To run the app locally, clone this repository and run app.R. This app requires the packages `tidyverse`, `shiny`, `shinythemes`, `scales`, `ggrepel`, `magrittr`, `rvest`, `data.table`, and `purrr`. 
