@@ -5,7 +5,10 @@ library(shinythemes)
 library(scales)
 library(ggrepel)
 library(showtext)
+library(rvest)
+library(data.table)
 
+font_add_google("Lato", "lato")
 showtext_auto()
 
 # TODO
