@@ -342,13 +342,13 @@ server = function(input, output, session) {
       unique_pokemon(unique(df$pokemon))
       
       output$pokemon = renderUI({
-        selectizeInput("pokemon", "Select Pokémon", choices = unique_pokemon(), multiple = TRUE, options = list(maxItems = 5))
+        selectizeInput("pokemon", "Select Pokémon", choices = sort(unique_pokemon()), multiple = TRUE, options = list(maxItems = 5))
       })
       
       usage_lvls(unique(df$elo))
       
       output$usage_elo = renderUI({
-        selectInput("usage_elo", "Minimum Elo", choices = usage_lvls())
+        selectInput("usage_elo", "Minimum Elo", choices = sort(usage_lvls()))
       })
     }
   })
@@ -379,7 +379,7 @@ server = function(input, output, session) {
   
   # teams elo input
   output$teams_elo = renderUI({
-    selectInput("teams_elo", "Minimum Elo", choices = team_lvls())
+    selectInput("teams_elo", "Minimum Elo", choices = sort(team_lvls()))
   })
     }
   }
@@ -415,7 +415,7 @@ server = function(input, output, session) {
       sum_lvls(unique(teams_df$elo))
       
       output$sum_elo = renderUI({
-        selectInput("sum_elo", "Minimum Elo", choices = sum_lvls())
+        selectInput("sum_elo", "Minimum Elo", choices = sort(sum_lvls()))
       })
     }
   })
