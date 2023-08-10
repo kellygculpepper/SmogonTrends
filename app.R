@@ -103,7 +103,6 @@ get_sum_usage_links = function(generation, tier, year, month) {
 }
 
 # calculate elo gap
-# do we need handling for if a mon is listed in one elo's data but not the other?
 calculate_gap = function(df) {
   df = df %>%
     group_by(date) %>%
@@ -121,6 +120,23 @@ calculate_gap = function(df) {
     select(pokemon, date, usage, elo_gap, color)
 }
 
+add_missing_combinations <- function(df) {
+  all_pokemon <- unique(df$pokemon)
+  all_dates <- unique(df$date)
+  
+  missing_combinations <- expand.grid(pokemon = all_pokemon,
+                                      date = all_dates) %>%
+    anti_join(df, by = c("pokemon", "date"))
+  
+  if (nrow(missing_combinations) > 0) {
+    missing_combinations <- missing_combinations %>%
+      mutate(usage = 0)
+    
+    df <- bind_rows(df, missing_combinations)
+  }
+  
+  return(df)
+}
 
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
@@ -337,6 +353,7 @@ server = function(input, output, session) {
       df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
       df = df %>%
         arrange(pokemon, date) %>% # sort so it will graph correctly
+        add_missing_combinations() %>% 
         match_colors() 
       data(df)
       unique_pokemon(unique(df$pokemon))
@@ -514,42 +531,6 @@ output$teams_msg = renderText({
   if(input$teams_gen == "Gen 1") "Weather is unavailable in Gen 1."
 })
 
-generate_data_message <- function(has_no_data) {
-  if (has_no_data) {
-    return("No data available for selected parameters.")
-  } else {
-    return(NULL)
-  }
-}
-
-output$usage_data_msg = renderText({
-  generate_data_message(usage_has_no_data())
-})
-
-output$elo_data_msg = renderText({
-  generate_data_message(usage_has_no_data())
-})
-
-output$playstyle_data_msg = renderText({
-  generate_data_message(teams_has_no_data())
-})
-
-output$weather_data_msg = renderText({
-  generate_data_message(teams_has_no_data())
-})
-
-output$sum_usage_data_msg = renderText({
-  generate_data_message(sum_has_no_data())
-})
-
-output$sum_weather_data_msg = renderText({
-  generate_data_message(sum_has_no_data())
-})
-
-output$sum_playstyle_data_msg = renderText({
-  generate_data_message(sum_has_no_data())
-})
-
 output$style_plot = renderPlot({
   req(teams_data())
   req(input$teams_elo)
@@ -689,6 +670,42 @@ output$sum_style_plot = renderPlot({
            subtitle = paste0(input$sum_month, "-", input$sum_year))
   }
 }})
+
+generate_data_message <- function(has_no_data) {
+  if (has_no_data) {
+    return("No data available for selected parameters.")
+  } else {
+    return(NULL)
+  }
+}
+
+output$usage_data_msg = renderText({
+  generate_data_message(usage_has_no_data())
+})
+
+output$elo_data_msg = renderText({
+  generate_data_message(usage_has_no_data())
+})
+
+output$playstyle_data_msg = renderText({
+  generate_data_message(teams_has_no_data())
+})
+
+output$weather_data_msg = renderText({
+  generate_data_message(teams_has_no_data())
+})
+
+output$sum_usage_data_msg = renderText({
+  generate_data_message(sum_has_no_data())
+})
+
+output$sum_weather_data_msg = renderText({
+  generate_data_message(sum_has_no_data())
+})
+
+output$sum_playstyle_data_msg = renderText({
+  generate_data_message(sum_has_no_data())
+})
 
 }
 
