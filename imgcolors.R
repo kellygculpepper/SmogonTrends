@@ -4,6 +4,13 @@ library(imgpalr)
 library(magrittr)
 library(purrr)
 
+# filter and overwrite the original Pokemon dataset
+pokemon_data <- read.csv("./data/Pokemon.csv")
+filtered_pokemon <- pokemon_data %>%
+  select(ID, Name, Form)
+write.csv(filtered_pokemon, file = "./data/Pokemon.csv", row.names = FALSE)
+
+
 mon_data = read.csv("data/Pokemon.csv", header = TRUE)
 
 get_URL <- function(url, ID) {
