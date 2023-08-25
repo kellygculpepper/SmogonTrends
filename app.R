@@ -12,13 +12,8 @@ font_add_google("Lato", "lato")
 showtext_auto()
 
 # TODO
-# test gen 6 data reading & calculate_gap() update
-# additional options (elo/pokemon) resetting even when they don't necc need to--not
-# sure if reasonable fix
-# handling for if a mon reaches 0% in a particular month (and thus is not in the data)?
-# (don't know if there are cases of this)
-# elo selection on usage plot?
-# !!! elo levels changing throughout the time period
+# test gen 6 data reading
+# elo levels changing throughout the time period
 
 source("colormatch.R")
 
@@ -327,6 +322,8 @@ server = function(input, output, session) {
   teams_has_no_data = reactiveVal(FALSE)
   sum_has_no_data = reactiveVal(FALSE)
   
+  selected_pokemon = reactiveVal(character(0))
+  
   # read data when user changes gen/tier/elo/time input (ELO removed for now, need to fix)
   observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
     urls = list()
@@ -338,7 +335,6 @@ server = function(input, output, session) {
         
         urls = c(urls, current_urls)
       }
-      
     }
     
     if(length(urls) == 0) {
@@ -358,8 +354,15 @@ server = function(input, output, session) {
       data(df)
       unique_pokemon(unique(df$pokemon))
       
+      choices = sort(unique_pokemon())
+      selected = input$pokemon
+      if (!is.null(selected)) {
+        selected = intersect(selected, choices)
+        selected_pokemon(selected)
+      }
+      
       output$pokemon = renderUI({
-        selectizeInput("pokemon", "Select Pokémon", choices = sort(unique_pokemon()), multiple = TRUE, options = list(maxItems = 5))
+        selectizeInput("pokemon", "Select Pokémon", choices = choices, selected = selected, multiple = TRUE, options = list(maxItems = 5))
       })
       
       usage_lvls(unique(df$elo))
