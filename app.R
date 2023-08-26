@@ -22,9 +22,16 @@ read_usage = function(file) {
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
                fill = TRUE, select = c(3, 4), na.string = "") %>%
     na.omit()
+  
+  colnames(data) = c("pokemon", "usage")
+  
   data$year = str_extract(file, "\\d{4}(?=\\-)") 
   data$month = str_extract(file, "(?<=\\-)\\d{2}")
   data$elo = as.integer(str_extract(file, "(?<=-)\\d+(?=\\.txt)"))
+  
+  data$usage = gsub("%", "", data$usage)
+  data$usage = as.numeric(data$usage)
+  
   return(data)
 }
 
@@ -52,7 +59,12 @@ read_teams = function(file) {
 get_team_links = function(generation, tier, year, month) {
   url = paste0("https://www.smogon.com/stats/", year, "-", month, "/metagame/")
   
-  webpage = read_html(url)
+  webpage = tryCatch(read_html(url), error = function(e) return(NULL))
+  
+  if(is.null(webpage)) {
+    return(character(0))
+  }
+  
   all_links = webpage %>%
     html_nodes("a") %>%
     html_attr("href")
@@ -77,7 +89,12 @@ get_sum_usage_links = function(generation, tier, year, month) {
   
   url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
   
-  webpage = read_html(url)
+  webpage = tryCatch(read_html(url), error = function(e) return(NULL))
+  
+  if(is.null(webpage)) {
+    return(character(0))
+  }
+  
   all_links = webpage %>%
     html_nodes("a") %>%
     html_attr("href")
@@ -343,9 +360,6 @@ server = function(input, output, session) {
       usage_has_no_data(FALSE)
       df = urls %>%
         map_dfr(~ read_usage(.))
-      colnames(df) = c("pokemon", "usage", "year", "month", "elo")
-      df$usage = gsub("%", "", df$usage)
-      df$usage = as.numeric(df$usage)
       df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
       df = df %>%
         arrange(pokemon, date) %>% # sort so it will graph correctly
@@ -417,9 +431,6 @@ server = function(input, output, session) {
       sum_has_no_data(FALSE)
       usage_df = usage_urls %>%
         map_dfr(~ read_usage(.))
-      colnames(usage_df) = c("pokemon", "usage", "year", "month", "elo")
-      usage_df$usage = gsub("%", "", usage_df$usage)
-      usage_df$usage = as.numeric(usage_df$usage)
       usage_df$date = as.Date(paste(usage_df$year, usage_df$month, "01", sep = "-"), format = "%Y-%m-%d")
       usage_df = usage_df %>%
         arrange(pokemon, date)
