@@ -37,8 +37,10 @@ add_IDs = function(df) {
   return(df)
 }
 
-match_colors <- function(df) {
+match_colors = function(df) {
   df = add_IDs(df)
   df = merge(df, color_data, by = "ID")
+  df = df %>%
+    select(!c(ID, Name, Form))
   return(df)
 }

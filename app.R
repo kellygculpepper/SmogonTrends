@@ -12,13 +12,21 @@ font_add_google("Lato", "lato")
 showtext_auto()
 
 # TODO
-# test gen 6 data reading
-# elo levels changing throughout the time period
+# remove extra columns from color data
+# text (mostly plot titles)
 
 source("colormatch.R")
 
+links_df = read.csv("data/links.csv")
+head(links_df)
+
 # function to read usage data
 read_usage = function(file) {
+  
+  empty_data = data.frame(pokemon = character(0), usage = numeric(0), 
+                           year = character(0), month = character(0), elo = integer(0))
+  
+  tryCatch({
   data = fread(file, skip = 5, header = FALSE, strip.white = TRUE, sep = "|",
                fill = TRUE, select = c(3, 4), na.string = "") %>%
     na.omit()
@@ -33,19 +41,26 @@ read_usage = function(file) {
   data$usage = as.numeric(data$usage)
   
   return(data)
+  }, error = function(e) {
+    return(empty_data) # return empty df if error (e.g. page exists but no data)
+  })
 }
 
 # function to read teams/metagame data
 read_teams = function(file) {
   
+  empty_data = data.frame(pokemon = character(0), usage = numeric(0), 
+                          year = character(0), month = character(0), elo = integer(0))
+  
+  tryCatch({
   data = readLines(file)
   data = data[data != ""]
   
   names = str_trim(str_extract(data, "[^\\.]*"))
   percents = str_trim(str_extract(data, "\\d+\\.\\d+")) %>% as.numeric()
-  
+
   df = data.frame(names, percents)
-  
+
   selected_vals = c("weatherless", "rain", "sun", "sand", "hail", "offense", "hyperoffense", "semistall", "stall", "balance")
   df = df %>% filter(names %in% selected_vals)
   df$year = str_extract(file, "\\d{4}(?=\\-)")
@@ -53,6 +68,9 @@ read_teams = function(file) {
   df$elo = str_extract(file, "(?<=-)\\d+(?=\\.txt)")
   
   return(df)
+  }, error = function(e) {
+    return(empty_data) # return empty df if error (e.g. page exists but no data)
+  })
 }
 
 # function to get links for metagame data
@@ -129,22 +147,22 @@ calculate_gap = function(df) {
     ) %>%
     ungroup() %>%
     filter(elo == 0) %>%
-    select(pokemon, date, usage, elo_gap, color)
+    select(pokemon, date, usage, elo_gap)
 }
 
-add_missing_combinations <- function(df) {
-  all_pokemon <- unique(df$pokemon)
-  all_dates <- unique(df$date)
+add_missing_combinations = function(df) {
+  all_pokemon = unique(df$pokemon)
+  all_dates = unique(df$date)
   
-  missing_combinations <- expand.grid(pokemon = all_pokemon,
+  missing_combinations = expand.grid(pokemon = all_pokemon,
                                       date = all_dates) %>%
     anti_join(df, by = c("pokemon", "date"))
   
   if (nrow(missing_combinations) > 0) {
-    missing_combinations <- missing_combinations %>%
+    missing_combinations = missing_combinations %>%
       mutate(usage = 0)
     
-    df <- bind_rows(df, missing_combinations)
+    df = bind_rows(df, missing_combinations)
   }
   
   return(df)
@@ -344,27 +362,42 @@ server = function(input, output, session) {
   # read data when user changes gen/tier/elo/time input (ELO removed for now, need to fix)
   observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
     urls = list()
-    for (year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
-      for (month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
-        month_str = ifelse(month < 10, paste0("0", month), toString(month))
+    for (curr_year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
+      for (curr_month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
         
-        current_urls = get_sum_usage_links(generation = substr(input$generation, 5, 5), tier = tolower(input$tier), year = year, month = month_str)
+        month_str = ifelse(curr_month < 10, paste0("0", curr_month), toString(curr_month))
+        
+        input_gen = as.integer(substr(input$generation, 5, 5))
+        input_tier = tolower(input$tier)
+        
+        matches = filter(links_df, gen == input_gen & tier == input_tier & year == curr_year & month == curr_month)
+        
+        if (nrow(matches) > 0) {
+          current_urls = matches$usage_link
+        } else {
+          # try scraping links manually if current month not in preloaded data
+          current_urls = get_sum_usage_links(generation = input_gen, tier = input_tier, year = curr_year, month = month_str)
+        }
         
         urls = c(urls, current_urls)
+        save(urls, file = "test.Rdata")
       }
     }
     
-    if(length(urls) == 0) {
-      usage_has_no_data(TRUE)
-    } else {
-      usage_has_no_data(FALSE)
       df = urls %>%
         map_dfr(~ read_usage(.))
+      
+      if(nrow(df) == 0) {
+        usage_has_no_data(TRUE)
+      } else {
+        usage_has_no_data(FALSE)
+        
       df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
       df = df %>%
         arrange(pokemon, date) %>% # sort so it will graph correctly
-        add_missing_combinations() %>% 
-        match_colors() 
+        add_missing_combinations() #%>% 
+        #match_colors()
+      
       data(df)
       unique_pokemon(unique(df$pokemon))
       
@@ -390,21 +423,35 @@ server = function(input, output, session) {
   # teams
   observeEvent(list(input$teams_gen, input$teams_tier, input$teams_start_month, input$teams_start_year, input$teams_end_month, input$teams_end_year), {
     urls = list()
-    for (year in seq(as.integer(input$teams_start_year), as.integer(input$teams_end_year))) {
-      for (month in seq(as.integer(input$teams_start_month), as.integer(input$teams_end_month))) {
-        month_str = ifelse(month < 10, paste0("0", month), toString(month))
+    for (curr_year in seq(as.integer(input$teams_start_year), as.integer(input$teams_end_year))) {
+      for (curr_month in seq(as.integer(input$teams_start_month), as.integer(input$teams_end_month))) {
         
-        current_urls = get_team_links(generation = substr(input$teams_gen, 5, 5), tier = tolower(input$teams_tier), year = year, month = month_str)
+        month_str = ifelse(curr_month < 10, paste0("0", curr_month), toString(curr_month))
+        
+        input_gen = as.integer(substr(input$teams_gen, 5, 5))
+        input_tier = tolower(input$teams_tier)
+        
+        matches = filter(links_df, gen == input_gen & tier == input_tier & year == curr_year & month == curr_month)
+        
+        if (nrow(matches) > 0) {
+          current_urls = matches$team_link
+        } else {
+          # try scraping links manually if current month not in preloaded data
+          current_urls = get_team_links(generation = input_gen, tier = input_tier, year = curr_year, month = month_str)
+        }
+        
         urls = c(urls, current_urls)
       }
     }
     
-    if(length(urls) == 0) {
+    df = urls %>%
+      map_dfr(~ read_teams(.))
+    
+    if(nrow(df) == 0) {
       teams_has_no_data(TRUE)
     } else {
       teams_has_no_data(FALSE)
-    df = urls %>%
-    map_dfr(~ read_teams(.))
+      
   df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d")
   df = df %>%
     arrange(names, date)
@@ -416,28 +463,41 @@ server = function(input, output, session) {
     selectInput("teams_elo", "Minimum Elo", choices = sort(team_lvls()))
   })
     }
-  }
-  )
+  })
   
   # monthly summary
   observeEvent(list(input$sum_gen, input$sum_tier, input$sum_year, input$sum_month), {
   
-    usage_urls = get_sum_usage_links(generation = substr(input$sum_gen, 5, 5), tier = tolower(input$sum_tier), year = input$sum_year, month = input$sum_month)
-    teams_urls = get_team_links(generation = substr(input$sum_gen, 5, 5), tier = tolower(input$sum_tier), year = input$sum_year, month = input$sum_month)
+    input_gen = as.integer(substr(input$sum_gen, 5, 5))
+    input_tier = tolower(input$sum_tier)
     
-    if(length(usage_urls) == 0) {
-      sum_has_no_data(TRUE)
-    } else{
-      sum_has_no_data(FALSE)
+    matches = filter(links_df, gen == input_gen & tier == input_tier & year == as.integer(input$sum_year) & month == as.integer(input$sum_month))
+    
+    if (nrow(matches) > 0) {
+      usage_urls = matches$usage_link
+      teams_urls = matches$team_link
+    } else {
+      # try scraping links manually if not in preloaded data
+      usage_urls = get_sum_usage_links(generation = gen, tier = tier, year = year, month = input$sum_month)
+      teams_urls = get_team_links(generation = gen, tier = tier, year = year, month = input$sum_month)
+    }
+      
       usage_df = usage_urls %>%
         map_dfr(~ read_usage(.))
+      
+      teams_df = teams_urls %>%
+        map_dfr(~ read_teams(.))
+      
+      if(nrow(usage_df) == 0 | nrow(teams_df) == 0) {
+        sum_has_no_data(TRUE)
+      } else {
+        sum_has_no_data(FALSE)
+      
       usage_df$date = as.Date(paste(usage_df$year, usage_df$month, "01", sep = "-"), format = "%Y-%m-%d")
       usage_df = usage_df %>%
         arrange(pokemon, date)
       sum_usage_data(usage_df)
       
-      teams_df = teams_urls %>%
-        map_dfr(~ read_teams(.))
       teams_df$date = as.Date(paste(teams_df$year, teams_df$month, "01", sep = "-"), format = "%Y-%m-%d")
       teams_df = teams_df %>%
         arrange(names, date)
@@ -489,7 +549,8 @@ server = function(input, output, session) {
     } else{
     selected_data = selected_data()
     selected_data = selected_data %>%
-      filter(elo == input$usage_elo)
+      filter(elo == input$usage_elo) %>%
+      match_colors()
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
@@ -508,7 +569,8 @@ server = function(input, output, session) {
     } else {
     selected_data = selected_data()
     selected_data = selected_data %>%
-      calculate_gap()
+      calculate_gap() %>%
+      match_colors()
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
@@ -685,7 +747,7 @@ output$sum_style_plot = renderPlot({
   }
 }})
 
-generate_data_message <- function(has_no_data) {
+generate_data_message = function(has_no_data) {
   if (has_no_data) {
     return("No data available for selected parameters.")
   } else {
