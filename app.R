@@ -7,13 +7,10 @@ library(ggrepel)
 library(showtext)
 library(rvest)
 library(data.table)
+library(ggfun)
 
-font_add_google("Lato", "lato")
+font_add_google("Lato", "Lato")
 showtext_auto()
-
-# TODO
-# remove extra columns from color data
-# text (mostly plot titles)
 
 source("colormatch.R")
 
@@ -182,7 +179,6 @@ ui = navbarPage(
     tags$link(rel = "preconnect", href = "https://fonts.googleapis.com"),
     tags$link(rel = "preconnect", href = "https://fonts.gstatic.com", crossorigin = ""),
     tags$link(href = "https://fonts.googleapis.com/css2?family=Bangers&display=swap", rel = "stylesheet"),
-    tags$link(href = "https://fonts.googleapis.com/css2?family=Lato&display=swap", rel = "stylesheet"),
     
     tags$style(
       HTML("
@@ -308,7 +304,7 @@ ui = navbarPage(
                             tags$div(
                               style = "margin-top: 20px;",
                               textOutput("sum_usage_data_msg"),
-                              plotOutput("sum_usage_plot", height = 600)
+                              plotOutput("sum_usage_plot", height = 600, width = "100%")
                             )),
                    tabPanel("Weather", 
                             tags$div(
@@ -554,11 +550,17 @@ server = function(input, output, session) {
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
-      labs(x = "Time", y = "Usage", color = "Pokémon") +
-      theme_minimal(base_size = 20) +
+      labs(x = "Month", y = "Usage (%)", color = "Pokémon") +
+      theme_minimal(base_size = 16, base_family = "Lato") +
       ggtitle("Usage over time") +
-      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
-      scale_color_manual(values = color_mapping)
+      scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
+      scale_color_manual(values = color_mapping) +
+      theme(
+    legend.position = "bottom",
+    legend.title = element_blank(), 
+    legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
+    legend.text = element_text(margin = margin(r = 25, unit = "pt"))
+  ) 
   }})
   
   output$elo_gap_plot = renderPlot({
@@ -574,11 +576,17 @@ server = function(input, output, session) {
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = elo_gap, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
-      labs(x = "Time", y = "Elo Gap", color = "Pokémon") +
-      theme_minimal(base_size = 20) +
+      labs(x = "Month", y = "Elo Gap", color = "Pokémon") +
+      theme_minimal(base_size = 16, base_family = "Lato") +
       ggtitle("Difference in Usage (Highest Elo minus all) over time") +
-      scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
-      scale_color_manual(values = color_mapping)
+      scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
+      scale_color_manual(values = color_mapping) +
+      theme(
+        legend.position = "bottom",
+        legend.title = element_blank(), 
+        legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
+        legend.text = element_text(margin = margin(r = 25, unit = "pt"))
+      )
   }})
 
 output$weather_plot = renderPlot({
@@ -595,9 +603,9 @@ output$weather_plot = renderPlot({
     mutate(names = factor(names, levels = c("rain", "sun", "sand", "hail"))) %>%
     ggplot(aes(x = date, y = percents, color = names, group = names)) +
     geom_line(linewidth = 1.2) +
-    labs(x = "Time", y = "Usage", color = "Weather", title = "Usage over time") +
-    theme_minimal(base_size = 20) + 
-    scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+    labs(x = "Month", y = "Usage (%)", color = "Weather", title = "Usage over time") +
+    theme_minimal(base_size = 16, base_family = "Lato") + 
+    scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
     scale_color_manual(values = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8"),
                        labels = c("Rain", "Sun", "Sand", "Hail"))
   }
@@ -619,10 +627,10 @@ output$style_plot = renderPlot({
     mutate(names = factor(names, levels = c("hyperoffense", "offense", "balance", "semistall", "stall"))) %>% 
     ggplot(aes(x = date, y = percents, color = names, group = names)) +
     geom_line(linewidth = 1.2) +
-    labs(x = "Time", y = "Usage", color = "Playstyle") +
-    theme_minimal(base_size = 20) + 
+    labs(x = "Month", y = "Usage (%)", color = "Playstyle") +
+    theme_minimal(base_size = 16, base_family = "Lato") + 
     ggtitle("Usage over time") + 
-    scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+    scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
     scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#E0B0D5", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
                        labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall"))
 }})
@@ -644,7 +652,7 @@ output$sum_usage_plot = renderPlot({
     geom_bar(stat = "identity", width = 0.9) +
     scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 54.52) +
     coord_flip() +
-    theme_void(base_size = 20) +
+    theme_void(base_size = 16, base_family = "Lato") +
     theme(axis.text.y = element_text(hjust = 1)) +
     labs(x = NULL, y = "Usage", title = paste0("Usage of ", input$sum_gen, " ", input$sum_tier, " Mons"),
          subtitle = paste0(input$sum_month, "-", input$sum_year)) +
@@ -672,7 +680,7 @@ output$sum_weather_plot = renderPlot({
       geom_bar(stat = "identity") + 
       labs(y = "Usage", x = "Weather", title = "Weather Team Usage",
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      theme_minimal(base_size = 20) +
+      theme_minimal(base_size = 16, base_family = "Lato") +
       scale_fill_manual(values = weather_color_mapping, drop = FALSE) +
       scale_x_discrete(labels = weather_label_mapping) +
       guides(fill = FALSE)
@@ -693,7 +701,7 @@ output$sum_weather_plot = renderPlot({
                        aes(y = pos, label = paste0(round(percents), "%")),
                        size = 6.5, nudge_x = 0.7, show.legend = FALSE, box.padding = 0.1, label.size = 0,
                        color = "white", segment.color = "black") +
-      theme_void(base_size = 20) +
+      theme_void(base_size = 16, base_family = "Lato") +
       labs(x = NULL, y = NULL, fill = "Weather", title = "Weather Team Usage", 
            subtitle = paste0(input$sum_month, "-", input$sum_year))
   }
@@ -721,7 +729,7 @@ output$sum_style_plot = renderPlot({
     ggplot(sum_teams_filtered, aes(x = names, y = percents, fill = names)) +
       geom_bar(stat = "identity") +
       labs(y = "Usage", x = "Playstyle",  title = "Team Style Usage", subtitle = paste0(input$sum_month, "-", input$sum_year)) + 
-      theme_minimal(base_size = 20) + 
+      theme_minimal(base_size = 16, base_family = "Lato") + 
       scale_fill_manual(values = style_color_mapping, drop = FALSE) +
       scale_x_discrete(labels = style_label_mapping) +
       guides(fill = FALSE)
@@ -741,7 +749,7 @@ output$sum_style_plot = renderPlot({
       geom_label_repel(data = sum_teams_filtered2,
                        aes(y = pos, label = paste0(round(percents), "%")), color = "white", segment.color = "black",
                        size = 6.5, nudge_x = 0.7, show.legend = FALSE, box.padding = 0.1, label.size = 0) +
-      theme_void(base_size = 20) +
+      theme_void(base_size = 16, base_family = "Lato") +
       labs(x = NULL, y = NULL, fill = "Playstyle", title = "Team Style Usage", 
            subtitle = paste0(input$sum_month, "-", input$sum_year))
   }
