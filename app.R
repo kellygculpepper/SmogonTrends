@@ -9,8 +9,14 @@ library(rvest)
 library(data.table)
 library(ggfun)
 
+# TODO
+# figure out text issue. it is caused by having showtext_auto() on
+# names in bottom legend have space to the right even when there's nothing to their right
+# length of labels (and subsequent moving of title) on summary usage + elo plots
+# size of bars on sum usage and elo plots. should it be a fixed width and bigger gens have a scroll?
+
 font_add_google("Lato", "Lato")
-showtext_auto()
+# showtext_auto()
 
 source("colormatch.R")
 
@@ -313,6 +319,12 @@ ui = navbarPage(
                               textOutput("sum_usage_data_msg"),
                               plotOutput("sum_usage_plot", height = 600, width = "100%")
                             )),
+                   tabPanel("Elo Gap",
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              textOutput("sum_elo_data_msg"),
+                              plotOutput("sum_elo_plot", height = 600, width = "100%")
+                            )),
                    tabPanel("Weather", 
                             tags$div(
                               style = "margin-top: 20px;",
@@ -557,16 +569,15 @@ server = function(input, output, session) {
     color_mapping = setNames(selected_data$color, selected_data$pokemon)
     ggplot(selected_data, aes(x = date, y = usage, color = pokemon, group = pokemon)) +
       geom_line(linewidth = 1.2) +
-      labs(x = "Month", y = "Usage (%)", color = "Pokémon") +
+      labs(x = "Month", y = "Usage (%)", color = "Pokémon", title = "Usage over time") +
       theme_minimal(base_size = 16, base_family = "Lato") +
-      ggtitle("Usage over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
       scale_color_manual(values = color_mapping) +
       theme(
-    legend.position = "bottom",
-    legend.title = element_blank(), 
-    legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
-    legend.text = element_text(margin = margin(r = 25, unit = "pt"))
+        legend.position = "bottom",
+        legend.title = element_blank(), 
+        legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
+        legend.text = element_text(margin = margin(r = 25, unit = "pt"))
   ) 
   }})
   
@@ -666,6 +677,36 @@ output$sum_usage_plot = renderPlot({
     geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
     guides(fill = FALSE)
   }
+})
+
+output$sum_elo_plot = renderPlot({
+  req(sum_usage_data())
+  if(sum_has_no_data()) {
+    return(NULL)
+  } else {
+    sum_usage_data = sum_usage_data()
+    sum_usage_data = sum_usage_data %>%
+      filter(usage >= 4.52)
+    sum_usage_data$date = as.Date(paste(sum_usage_data$year, sum_usage_data$month, "01", sep = "-"), format = "%Y-%m-%d")
+    sum_usage_data = sum_usage_data %>%
+      calculate_gap() %>%
+      filter(elo_gap > 1) # hypothetically interested in all >0 but doing this for now
+    
+    sum_usage_data = sum_usage_data[order(sum_usage_data$elo_gap),]
+    sum_usage_data$rank = nrow(sum_usage_data):1
+    sum_usage_data$pokemon_ranked = sprintf("%d. %s", sum_usage_data$rank, sum_usage_data$pokemon)
+  
+    ggplot(sum_usage_data, aes(x = reorder(pokemon_ranked, elo_gap), y = elo_gap, fill = elo_gap)) +
+      geom_bar(stat = "identity", width = 0.9) +
+      scale_fill_gradient2(low = "red", mid = "yellow", high = "green") +
+      coord_flip() +
+      theme_void(base_size = 16, base_family = "Lato") +
+      theme(axis.text.y = element_text(hjust = 1)) +
+      labs(x = NULL, y = "Usage", title = paste0("Top Elo Gap, ", input$sum_gen, " ", input$sum_tier),
+           subtitle = paste0(input$sum_month, "-", input$sum_year)) +
+      geom_text(aes(label = paste0(sprintf("%.1f", elo_gap),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
+      guides(fill = FALSE)
+        }
 })
 
 output$sum_weather_plot = renderPlot({
@@ -787,6 +828,10 @@ output$weather_data_msg = renderText({
 })
 
 output$sum_usage_data_msg = renderText({
+  generate_data_message(sum_has_no_data())
+})
+
+output$sum_elo_data_msg = renderText({
   generate_data_message(sum_has_no_data())
 })
 
