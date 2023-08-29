@@ -188,6 +188,13 @@ ui = navbarPage(
           color: white;
         }
         
+        .about-class {
+          margin-top: -20px;
+          padding-top: 0px; 
+        }
+        
+        .about-class hr { margin-top: 0px; }
+        
          .navbar .navbar-nav {
           float: right;
          }
@@ -324,9 +331,10 @@ ui = navbarPage(
              )
            )),
   tabPanel("About",
-           fluidRow(
+           fluidRow(class = "about-class",
              column(width = 12,
-                    h2("About SmogonTrends"),
+                    h3("About SmogonTrends"),
+                    hr(),
                     p("SmogonTrends allows users to visualize usage and metagame data from Pokémon Showdown, a popular online battle simulator.
                       This app was developed by Kelly Culpepper using the R Shiny framework."),
                     p("The primary data source for this project is ", a("Smogon.", href = "https://www.smogon.com/stats/"), " Additional data is sourced from ", a("pokemonData,", href = "https://github.com/lgreski/pokemonData"), " authored by lgreski, and ", a("Bulbapedia.", href = "https://bulbagarden.net/")),
@@ -535,7 +543,6 @@ server = function(input, output, session) {
     stf
   })
   
-  
   # usage over time plot
   output$usage_plot = renderPlot({
     req(data())
@@ -656,7 +663,7 @@ output$sum_usage_plot = renderPlot({
     theme(axis.text.y = element_text(hjust = 1)) +
     labs(x = NULL, y = "Usage", title = paste0("Usage of ", input$sum_gen, " ", input$sum_tier, " Mons"),
          subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-    geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 6) +
+    geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
     guides(fill = FALSE)
   }
 })
