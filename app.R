@@ -8,6 +8,9 @@ library(showtext)
 library(rvest)
 library(data.table)
 library(ggfun)
+#library(DT)
+#library(shinydashboard)
+library(shinyWidgets)
 
 # TODO
 # figure out text issue. it is caused by having showtext_auto() on
@@ -43,6 +46,10 @@ read_usage = function(file) {
   data$usage = gsub("%", "", data$usage)
   data$usage = as.numeric(data$usage)
   
+  data$date = as.Date(paste(data$year, data$month, "01", sep = "-"), format = "%Y-%m-%d")
+  data = data %>%
+    arrange(pokemon, date)
+  
   return(data)
   }, error = function(e) {
     return(empty_data) # return empty df if error (e.g. page exists but no data)
@@ -70,6 +77,10 @@ read_teams = function(file) {
   df$month = str_extract(file, "(?<=\\-)\\d{2}")
   df$elo = str_extract(file, "(?<=-)\\d+(?=\\.txt)")
   
+  df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d")
+  df = df %>%
+    arrange(names, date)
+  
   return(df)
   }, error = function(e) {
     return(empty_data) # return empty df if error (e.g. page exists but no data)
@@ -78,6 +89,13 @@ read_teams = function(file) {
 
 # function to get links for metagame data
 get_team_links = function(generation, tier, year, month) {
+  matches = filter(links_df, gen == generation & tier == .env$tier & year == .env$year & month == .env$month)
+  
+  if (nrow(matches > 0)) {
+    return(matches$team_link)
+  } else {
+    month = ifelse(month < 10, paste0("0", month), toString(month))
+    
   url = paste0("https://www.smogon.com/stats/", year, "-", month, "/metagame/")
   
   webpage = tryCatch(read_html(url), error = function(e) return(NULL))
@@ -103,11 +121,18 @@ get_team_links = function(generation, tier, year, month) {
   } else {
     return(paste0(url, links))
   }
-}
+}}
 
 # modified for monthly summary (all elo)
-get_sum_usage_links = function(generation, tier, year, month) {
+get_usage_links = function(generation, tier, year, month) {
   
+  matches = filter(links_df, gen == generation & tier == .env$tier & year == .env$year & month == .env$month)
+  
+  if (nrow(matches) > 0) {
+    return(matches$usage_link)
+  } else {
+    month = ifelse(month < 10, paste0("0", month), toString(month))
+    
   url = paste0("https://www.smogon.com/stats/", year, "-", month, "/")
   
   webpage = tryCatch(read_html(url), error = function(e) return(NULL))
@@ -133,7 +158,7 @@ get_sum_usage_links = function(generation, tier, year, month) {
   } else {
     return(paste0(url, links))
   }
-}
+}}
 
 # calculate elo gap
 calculate_gap = function(df) {
@@ -146,11 +171,28 @@ calculate_gap = function(df) {
     df %>% 
       group_by(pokemon, date) %>%
     mutate(
-      elo_gap = ifelse(any(elo != 0), usage[elo != 0] - usage[elo == 0], usage[elo == 0] - 0)
+      elo_gap = ifelse(any(elo != 0), usage[elo != 0] - usage[elo == 0], -usage[elo == 0])
     ) %>%
     ungroup() %>%
     filter(elo == 0) %>%
     select(pokemon, date, usage, elo_gap)
+}
+
+calculate_ratio = function(df) {
+  df = df %>%
+    group_by(date) %>%
+    mutate(max_elo_in_group = max(elo)) %>%
+    filter(elo == 0 | elo == max_elo_in_group) %>%
+    select(-max_elo_in_group)
+  
+  df %>% 
+    group_by(pokemon, date) %>%
+    mutate(
+      elo_ratio = ifelse(any(elo != 0), usage[elo != 0] / usage[elo == 0], 0)
+    ) %>%
+    ungroup() %>%
+    filter(elo == 0) %>%
+    select(pokemon, date, usage, elo_ratio)
 }
 
 add_missing_combinations = function(df) {
@@ -171,6 +213,11 @@ add_missing_combinations = function(df) {
   return(df)
 }
 
+# return list of mons banned during curr_month
+get_bans = function(curr_month_df, next_month_df, last_month_df) {
+  
+}
+
 months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
 # UI
@@ -178,6 +225,10 @@ ui = navbarPage(
     title = tags$div(
       class = "title-class",
       "SmogonTrends"),
+    
+    # header = tagList(
+    #   useShinydashboard()
+    # ),
     
   theme = shinytheme("yeti"),
   
@@ -315,16 +366,38 @@ ui = navbarPage(
                  tabsetPanel(
                    tabPanel("Usage", 
                             tags$div(
-                              style = "margin-top: 20px;",
+                              style = "margin-top: 20px; overflow-y: scroll; height:600px",
                               textOutput("sum_usage_data_msg"),
-                              plotOutput("sum_usage_plot", height = 600, width = "100%")
+                              plotOutput("sum_usage_plot")
                             )),
                    tabPanel("Elo Gap",
                             tags$div(
                               style = "margin-top: 20px;",
                               textOutput("sum_elo_data_msg"),
-                              plotOutput("sum_elo_plot", height = 600, width = "100%")
+                              plotOutput("sum_elo_plot", width = "100%")
                             )),
+                   # tabPanel("Mons", 
+                   #          # don't display if no bans?
+                   #          fluidRow(
+                   #            box(width = 4, title = "Recent Bans",
+                   #                DTOutput("bans_dt")),
+                   #            box(width = 8,
+                   #                   title = "More Popular at High Elo",
+                   #                   htmlOutput("elo_images"))
+                   #          ),
+                   #          fluidRow(
+                   #            box(width = 6,
+                   #                   title = "Top Gains",
+                   #                   DTOutput("gains_dt")),
+                   #            box(width = 6,
+                   #                   title = "Top Losses",
+                   #                   DTOutput("losses_dt"))
+                   #          )),
+                   # tabPanel("Elo Ratio",
+                   #          tags$div(
+                   #            style = "margin-top: 20px;",
+                   #            plotOutput("sum_ratio_plot", height = 600, width = "100%")
+                   #          )),
                    tabPanel("Weather", 
                             tags$div(
                               style = "margin-top: 20px;",
@@ -386,17 +459,9 @@ server = function(input, output, session) {
         input_gen = as.integer(substr(input$generation, 5, 5))
         input_tier = tolower(input$tier)
         
-        matches = filter(links_df, gen == input_gen & tier == input_tier & year == curr_year & month == curr_month)
-        
-        if (nrow(matches) > 0) {
-          current_urls = matches$usage_link
-        } else {
-          # try scraping links manually if current month not in preloaded data
-          current_urls = get_sum_usage_links(generation = input_gen, tier = input_tier, year = curr_year, month = month_str)
-        }
+        current_urls = get_usage_links(generation = input_gen, tier = input_tier, year = curr_year, month = curr_month)
         
         urls = c(urls, current_urls)
-        save(urls, file = "test.Rdata")
       }
     }
     
@@ -408,11 +473,8 @@ server = function(input, output, session) {
       } else {
         usage_has_no_data(FALSE)
         
-      df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d") # Create date column
       df = df %>%
-        arrange(pokemon, date) %>% # sort so it will graph correctly
-        add_missing_combinations() #%>% 
-        #match_colors()
+        add_missing_combinations()
       
       data(df)
       unique_pokemon(unique(df$pokemon))
@@ -442,19 +504,10 @@ server = function(input, output, session) {
     for (curr_year in seq(as.integer(input$teams_start_year), as.integer(input$teams_end_year))) {
       for (curr_month in seq(as.integer(input$teams_start_month), as.integer(input$teams_end_month))) {
         
-        month_str = ifelse(curr_month < 10, paste0("0", curr_month), toString(curr_month))
-        
         input_gen = as.integer(substr(input$teams_gen, 5, 5))
         input_tier = tolower(input$teams_tier)
         
-        matches = filter(links_df, gen == input_gen & tier == input_tier & year == curr_year & month == curr_month)
-        
-        if (nrow(matches) > 0) {
-          current_urls = matches$team_link
-        } else {
-          # try scraping links manually if current month not in preloaded data
-          current_urls = get_team_links(generation = input_gen, tier = input_tier, year = curr_year, month = month_str)
-        }
+        current_urls = get_team_links(generation = input_gen, tier = input_tier, year = curr_year, month = curr_month)
         
         urls = c(urls, current_urls)
       }
@@ -468,9 +521,6 @@ server = function(input, output, session) {
     } else {
       teams_has_no_data(FALSE)
       
-  df$date = as.Date(paste(df$year, df$month, "01", sep = "-"), format = "%Y-%m-%d")
-  df = df %>%
-    arrange(names, date)
   teams_data(df)
   team_lvls(unique(df$elo))
   
@@ -487,16 +537,8 @@ server = function(input, output, session) {
     input_gen = as.integer(substr(input$sum_gen, 5, 5))
     input_tier = tolower(input$sum_tier)
     
-    matches = filter(links_df, gen == input_gen & tier == input_tier & year == as.integer(input$sum_year) & month == as.integer(input$sum_month))
-    
-    if (nrow(matches) > 0) {
-      usage_urls = matches$usage_link
-      teams_urls = matches$team_link
-    } else {
-      # try scraping links manually if not in preloaded data
-      usage_urls = get_sum_usage_links(generation = gen, tier = tier, year = year, month = input$sum_month)
-      teams_urls = get_team_links(generation = gen, tier = tier, year = year, month = input$sum_month)
-    }
+      usage_urls = get_usage_links(generation = input_gen, tier = input_tier, year = as.integer(input$sum_year), month = as.integer(input$sum_month))
+      teams_urls = get_team_links(generation = input_gen, tier = input_tier, year = as.integer(input$sum_year), month = as.integer(input$sum_month))
       
       usage_df = usage_urls %>%
         map_dfr(~ read_usage(.))
@@ -508,15 +550,9 @@ server = function(input, output, session) {
         sum_has_no_data(TRUE)
       } else {
         sum_has_no_data(FALSE)
-      
-      usage_df$date = as.Date(paste(usage_df$year, usage_df$month, "01", sep = "-"), format = "%Y-%m-%d")
-      usage_df = usage_df %>%
-        arrange(pokemon, date)
+
       sum_usage_data(usage_df)
-      
-      teams_df$date = as.Date(paste(teams_df$year, teams_df$month, "01", sep = "-"), format = "%Y-%m-%d")
-      teams_df = teams_df %>%
-        arrange(names, date)
+    
       sum_teams_data(teams_df)
       
       sum_lvls(unique(teams_df$elo))
@@ -524,6 +560,8 @@ server = function(input, output, session) {
       output$sum_elo = renderUI({
         selectInput("sum_elo", "Minimum Elo", choices = sort(sum_lvls()))
       })
+      
+      #bans_df = get_bans(usage_df)
     }
   })
   
@@ -544,7 +582,8 @@ server = function(input, output, session) {
   sum_usage_filtered = reactive({
     req(sum_usage_data(), input$sum_elo)
     suf = sum_usage_data() %>%
-      filter(elo == input$sum_elo)
+      filter(elo == input$sum_elo & usage >= 4.52) %>%
+      calculate_gap()
     suf
   })
   
@@ -554,6 +593,13 @@ server = function(input, output, session) {
       filter(elo == input$sum_elo)
     stf
   })
+  
+  legend_theme = theme(
+    legend.position = "bottom",
+    legend.title = element_blank(), 
+    legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
+    legend.text = element_text(margin = margin(r = 25, unit = "pt"))
+  )
   
   # usage over time plot
   output$usage_plot = renderPlot({
@@ -599,12 +645,7 @@ server = function(input, output, session) {
       ggtitle("Difference in Usage (Highest Elo minus all) over time") +
       scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
       scale_color_manual(values = color_mapping) +
-      theme(
-        legend.position = "bottom",
-        legend.title = element_blank(), 
-        legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
-        legend.text = element_text(margin = margin(r = 25, unit = "pt"))
-      )
+      legend_theme
   }})
 
 output$weather_plot = renderPlot({
@@ -666,18 +707,26 @@ output$sum_usage_plot = renderPlot({
   sum_usage_filtered$rank = nrow(sum_usage_filtered):1
   sum_usage_filtered$pokemon_ranked = sprintf("%d. %s", sum_usage_filtered$rank, sum_usage_filtered$pokemon)
   
-  ggplot(sum_usage_filtered, aes(x = reorder(pokemon_ranked, usage), y = usage, fill = usage)) +
+  sum_usage_filtered$pokemon = str_replace(sum_usage_filtered$pokemon, "-", "-\n")
+  
+  split_names = str_split_fixed(sum_usage_filtered$pokemon, "-", 2)[, 1]
+  name_lengths = nchar(split_names)
+  
+  name_size = (16*9) / max(name_lengths)
+  
+  # switch to reorder(pokemon_ranked, usage) again if want to put numbers back
+  ggplot(sum_usage_filtered, aes(x = reorder(pokemon, usage), y = usage, fill = usage)) +
     geom_bar(stat = "identity", width = 0.9) +
     scale_fill_gradient2(low = "red", mid = "yellow", high = "green", midpoint = 54.52) +
     coord_flip() +
     theme_void(base_size = 16, base_family = "Lato") +
-    theme(axis.text.y = element_text(hjust = 1)) +
+    theme(axis.text.y = element_text(hjust = 1, size = name_size)) +
     labs(x = NULL, y = "Usage", title = paste0("Usage of ", input$sum_gen, " ", input$sum_tier, " Mons"),
          subtitle = paste0(input$sum_month, "-", input$sum_year)) +
     geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
     guides(fill = FALSE)
   }
-})
+}, height = function(){30 * nrow(sum_usage_filtered())})
 
 output$sum_elo_plot = renderPlot({
   req(sum_usage_data())
@@ -696,19 +745,56 @@ output$sum_elo_plot = renderPlot({
     sum_usage_data$rank = nrow(sum_usage_data):1
     sum_usage_data$pokemon_ranked = sprintf("%d. %s", sum_usage_data$rank, sum_usage_data$pokemon)
   
-    ggplot(sum_usage_data, aes(x = reorder(pokemon_ranked, elo_gap), y = elo_gap, fill = elo_gap)) +
+    sum_usage_data$pokemon = str_replace(sum_usage_data$pokemon, "-", "-\n")
+    
+    split_names = str_split_fixed(sum_usage_data$pokemon, "-", 2)[, 1]
+    name_lengths = nchar(split_names)
+    
+    name_size = (16*9) / max(name_lengths)
+    
+    ggplot(sum_usage_data, aes(x = reorder(pokemon, elo_gap), y = elo_gap, fill = elo_gap)) +
       geom_bar(stat = "identity", width = 0.9) +
       scale_fill_gradient2(low = "red", mid = "yellow", high = "green") +
       coord_flip() +
       theme_void(base_size = 16, base_family = "Lato") +
-      theme(axis.text.y = element_text(hjust = 1)) +
+      theme(axis.text.y = element_text(hjust = 1, size = name_size)) +
       labs(x = NULL, y = "Usage", title = paste0("Top Elo Gap, ", input$sum_gen, " ", input$sum_tier),
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
       geom_text(aes(label = paste0(sprintf("%.1f", elo_gap),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
       guides(fill = FALSE)
         }
-})
+}, height = 600)
 
+# output$sum_ratio_plot = renderPlot({
+#   req(sum_usage_data())
+#   if(sum_has_no_data()) {
+#     return(NULL)
+#   } else {
+#     sum_usage_data = sum_usage_data()
+#     sum_usage_data = sum_usage_data %>%
+#       filter(usage >= 4.52)
+#     sum_usage_data$date = as.Date(paste(sum_usage_data$year, sum_usage_data$month, "01", sep = "-"), format = "%Y-%m-%d")
+#     sum_usage_data = sum_usage_data %>%
+#       calculate_ratio() %>%
+#       head(n = 20) # hypothetically interested in all >0 but doing this for now
+#     
+#     sum_usage_data = sum_usage_data[order(sum_usage_data$elo_ratio),]
+#     sum_usage_data$rank = nrow(sum_usage_data):1
+#     sum_usage_data$pokemon_ranked = sprintf("%d. %s", sum_usage_data$rank, sum_usage_data$pokemon)
+#     
+#     ggplot(sum_usage_data, aes(x = reorder(pokemon_ranked, elo_ratio), y = elo_ratio, fill = elo_ratio)) +
+#       geom_bar(stat = "identity", width = 0.9) +
+#       scale_fill_gradient2(low = "red", mid = "yellow", high = "green") +
+#       coord_flip() +
+#       theme_void(base_size = 16, base_family = "Lato") +
+#       theme(axis.text.y = element_text(hjust = 1)) +
+#       labs(x = NULL, y = "Usage", title = paste0("Top Elo Ratio, ", input$sum_gen, " ", input$sum_tier),
+#            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
+#       geom_text(aes(label = paste0(elo_ratio)), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
+#                   guides(fill = FALSE)
+#   }
+# })
+plot_height = 400
 output$sum_weather_plot = renderPlot({
   if (input$sum_gen != "Gen 1") {
   req(sum_teams_filtered())
@@ -735,6 +821,7 @@ output$sum_weather_plot = renderPlot({
   }
   
   else {
+    plot_height = 500
     sum_teams_filtered2 = sum_teams_filtered %>% 
       mutate(csum = rev(cumsum(rev(percents))), 
              pos = percents/2 + lead(csum, 1),
@@ -751,10 +838,11 @@ output$sum_weather_plot = renderPlot({
                        color = "white", segment.color = "black") +
       theme_void(base_size = 16, base_family = "Lato") +
       labs(x = NULL, y = NULL, fill = "Weather", title = "Weather Team Usage", 
-           subtitle = paste0(input$sum_month, "-", input$sum_year))
+           subtitle = paste0(input$sum_month, "-", input$sum_year)) +
+      legend_theme
   }
   }
-}})
+}}, height = plot_height)
 
 output$sum_msg = renderText({
   if(input$sum_gen == "Gen 1") "Weather is unavailable in Gen 1."
@@ -802,6 +890,8 @@ output$sum_style_plot = renderPlot({
            subtitle = paste0(input$sum_month, "-", input$sum_year))
   }
 }})
+
+# output$bans_dt = renderDataTable()
 
 generate_data_message = function(has_no_data) {
   if (has_no_data) {
