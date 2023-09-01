@@ -10,13 +10,11 @@ library(data.table)
 library(ggfun)
 #library(DT)
 #library(shinydashboard)
-library(shinyWidgets)
+#library(shinyWidgets)
 
 # TODO
-# figure out text issue. it is caused by having showtext_auto() on
+# hyphen wrapping does not work well for ruin legendaries
 # names in bottom legend have space to the right even when there's nothing to their right
-# length of labels (and subsequent moving of title) on summary usage + elo plots
-# size of bars on sum usage and elo plots. should it be a fixed width and bigger gens have a scroll?
 
 font_add_google("Lato", "Lato")
 # showtext_auto()
@@ -452,7 +450,9 @@ server = function(input, output, session) {
   observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
     urls = list()
     for (curr_year in seq(as.integer(input$start_year), as.integer(input$end_year))) {
-      for (curr_month in seq(as.integer(input$start_month), as.integer(input$end_month))) {
+      loop_start = ifelse(curr_year == as.integer(input$start_year), as.integer(input$start_month), 1)
+      loop_end = ifelse(curr_year == as.integer(input$end_year), as.integer(input$end_month), 12)
+      for (curr_month in seq(loop_start, loop_end)) {
         
         month_str = ifelse(curr_month < 10, paste0("0", curr_month), toString(curr_month))
         
@@ -501,8 +501,13 @@ server = function(input, output, session) {
   # teams
   observeEvent(list(input$teams_gen, input$teams_tier, input$teams_start_month, input$teams_start_year, input$teams_end_month, input$teams_end_year), {
     urls = list()
+    
     for (curr_year in seq(as.integer(input$teams_start_year), as.integer(input$teams_end_year))) {
-      for (curr_month in seq(as.integer(input$teams_start_month), as.integer(input$teams_end_month))) {
+      
+      loop_start = ifelse(curr_year == as.integer(input$start_year), as.integer(input$start_month), 1)
+      loop_end = ifelse(curr_year == as.integer(input$end_year), as.integer(input$end_month), 12)
+      
+      for (curr_month in seq(loop_start, loop_end)) {
         
         input_gen = as.integer(substr(input$teams_gen, 5, 5))
         input_tier = tolower(input$teams_tier)
