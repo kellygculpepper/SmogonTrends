@@ -427,7 +427,7 @@ server = function(input, output, session) {
       geom_line(linewidth = 1.2) +
       labs(x = "Month", y = "Usage (%)", color = "Pokémon", title = "Usage over time") +
       theme_minimal(base_size = 16, base_family = "Lato") +
-      scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
+      scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
       scale_color_manual(values = color_mapping) +
       theme(
         legend.position = "bottom",
@@ -435,7 +435,7 @@ server = function(input, output, session) {
         legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
         legend.text = element_text(margin = margin(r = 25, unit = "pt"))
   ) 
-  }})
+  }}, height = 500)
   
   output$elo_gap_plot = renderPlot({
     req(data())
@@ -461,10 +461,10 @@ server = function(input, output, session) {
       labs(x = "Month", y = "Elo Gap", color = "Pokémon") +
       theme_minimal(base_size = 16, base_family = "Lato") +
       ggtitle("Difference in Usage (Highest Elo minus all) over time") +
-      scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
+      scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
       scale_color_manual(values = color_mapping) +
       legend_theme
-  }})
+  }}, height = 500)
 
 output$weather_plot = renderPlot({
   if(input$teams_gen != "Gen 1") {
@@ -490,15 +490,11 @@ output$weather_plot = renderPlot({
     geom_line(linewidth = 1.2) +
     labs(x = "Month", y = "Usage (%)", color = "Weather", title = "Usage over time") +
     theme_minimal(base_size = 16, base_family = "Lato") + 
-    scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
+    scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
     scale_color_manual(values = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8"),
                        labels = c("Rain", "Sun", "Sand", "Hail"))
   }
-}})
-
-output$teams_msg = renderText({
-  if(input$teams_gen == "Gen 1") "Weather is unavailable in Gen 1."
-})
+}}, height = 500)
 
 output$style_plot = renderPlot({
   req(teams_data())
@@ -523,10 +519,10 @@ output$style_plot = renderPlot({
     labs(x = "Month", y = "Usage (%)", color = "Playstyle") +
     theme_minimal(base_size = 16, base_family = "Lato") + 
     ggtitle("Usage over time") + 
-    scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
+    scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
     scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#E0B0D5", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
                        labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall"))
-}})
+}}, height = 500)
 
 output$sum_usage_plot = renderPlot({
   req(sum_usage_filtered())
@@ -705,6 +701,10 @@ generate_data_message = function(has_no_data) {
     return(NULL)
   }
 }
+
+output$teams_msg = renderText({
+  if(input$teams_gen == "Gen 1") "Weather is unavailable in Gen 1."
+})
 
 output$usage_data_msg = renderText({
   generate_data_message(usage_has_no_data())

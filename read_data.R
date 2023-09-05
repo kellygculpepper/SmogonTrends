@@ -161,7 +161,7 @@ read_data = function(type, input_gen, input_tier, start_month, start_year, end_m
   }
   
   df = df %>%
-    select(!c(gen, tier))
+    select(name, usage, date, elo)
   
   df$date = as.Date(df$date, format = "%Y-%m-%d")
   
@@ -185,7 +185,7 @@ read_data = function(type, input_gen, input_tier, start_month, start_year, end_m
         
         curr_urls = read_links(type, generation = input_gen, tier = input_tier, 
                                     year = curr_year, month = curr_month)
-        urls = c(urls, current_urls)
+        urls = c(urls, curr_urls)
       }
     }
     
@@ -195,5 +195,7 @@ read_data = function(type, input_gen, input_tier, start_month, start_year, end_m
     df = rbind(df, new_data)
     df = df %>%
       arrange(name, date)
+    
+    return(df)
   }
 }
