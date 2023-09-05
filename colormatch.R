@@ -37,7 +37,7 @@ getID = function(x) {
 }
 
 add_IDs = function(df) {
-  df = df %>% mutate(ID = sapply(pokemon, getID))
+  df = df %>% mutate(ID = sapply(name, getID))
   return(df)
 }
 
