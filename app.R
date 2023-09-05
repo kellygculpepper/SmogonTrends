@@ -415,11 +415,19 @@ server = function(input, output, session) {
       filter(elo == input$usage_elo) %>%
       match_colors()
     color_mapping = setNames(selected_data$color, selected_data$name)
+    
+    num_months = length(unique(selected_data$date))
+    if (num_months <= 6) {
+      breaks = "1 month"
+    } else {
+      breaks = paste0(toString(num_months %/% 6), " months")
+    }
+    
     ggplot(selected_data, aes(x = date, y = usage, color = name, group = name)) +
       geom_line(linewidth = 1.2) +
       labs(x = "Month", y = "Usage (%)", color = "Pokémon", title = "Usage over time") +
       theme_minimal(base_size = 16, base_family = "Lato") +
-      scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
+      scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
       scale_color_manual(values = color_mapping) +
       theme(
         legend.position = "bottom",
@@ -440,12 +448,20 @@ server = function(input, output, session) {
       calculate_gap() %>%
       match_colors()
     color_mapping = setNames(selected_data$color, selected_data$name)
+    
+    num_months = length(unique(selected_data$date))
+    if (num_months <= 6) {
+      breaks = "1 month"
+    } else {
+      breaks = paste0(toString(num_months %/% 6), " months")
+    }
+    
     ggplot(selected_data, aes(x = date, y = elo_gap, color = name, group = name)) +
       geom_line(linewidth = 1.2) +
       labs(x = "Month", y = "Elo Gap", color = "Pokémon") +
       theme_minimal(base_size = 16, base_family = "Lato") +
       ggtitle("Difference in Usage (Highest Elo minus all) over time") +
-      scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
+      scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
       scale_color_manual(values = color_mapping) +
       legend_theme
   }})
@@ -459,14 +475,22 @@ output$weather_plot = renderPlot({
     return(NULL)
   } else {
   teams_filtered = teams_filtered()
-  teams_filtered %>%
+  teams_filtered = teams_filtered %>%
     filter(name %in% c("rain", "sun", "sand", "hail")) %>%
-    mutate(name = factor(name, levels = c("rain", "sun", "sand", "hail"))) %>%
-    ggplot(aes(x = date, y = usage, color = name, group = name)) +
+    mutate(name = factor(name, levels = c("rain", "sun", "sand", "hail")))
+  
+  num_months = length(unique(teams_filtered$date))
+  if (num_months <= 6) {
+    breaks = "1 month"
+  } else {
+    breaks = paste0(toString(num_months %/% 6), " months")
+  }
+  
+    ggplot(teams_filtered, aes(x = date, y = usage, color = name, group = name)) +
     geom_line(linewidth = 1.2) +
     labs(x = "Month", y = "Usage (%)", color = "Weather", title = "Usage over time") +
     theme_minimal(base_size = 16, base_family = "Lato") + 
-    scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
+    scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
     scale_color_manual(values = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8"),
                        labels = c("Rain", "Sun", "Sand", "Hail"))
   }
@@ -483,15 +507,23 @@ output$style_plot = renderPlot({
     return(NULL)
   } else {
   teams_filtered = teams_filtered()
-  teams_filtered %>%
+  teams_filtered = teams_filtered %>%
     filter(name %in% c("hyperoffense", "offense", "balance", "semistall", "stall")) %>%
-    mutate(name = factor(name, levels = c("hyperoffense", "offense", "balance", "semistall", "stall"))) %>% 
-    ggplot(aes(x = date, y = usage, color = name, group = name)) +
+    mutate(name = factor(name, levels = c("hyperoffense", "offense", "balance", "semistall", "stall")))
+  
+  num_months = length(unique(teams_filtered$date))
+  if (num_months <= 6) {
+    breaks = "1 month"
+  } else {
+    breaks = paste0(toString(num_months %/% 6), " months")
+  }
+  
+    ggplot(teams_filtered, aes(x = date, y = usage, color = name, group = name)) +
     geom_line(linewidth = 1.2) +
     labs(x = "Month", y = "Usage (%)", color = "Playstyle") +
     theme_minimal(base_size = 16, base_family = "Lato") + 
     ggtitle("Usage over time") + 
-    scale_x_date(date_breaks = "1 month", date_labels = "%-m/%y") +
+    scale_x_date(date_breaks = breaks, date_labels = "%-m/%y") +
     scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#E0B0D5", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
                        labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall"))
 }})
