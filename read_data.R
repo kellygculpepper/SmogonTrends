@@ -148,10 +148,9 @@ read_data = function(type, input_gen, input_tier, start_month, start_year, end_m
   end_date = paste(end_year, end_month, "01", sep = "-")
   
   # load all data available in db
-  query = sprintf("SELECT * FROM Data WHERE gen = ? AND tier = ? AND date >= ? AND date <= ?")
-  
-  df = dbGetQuery(connection, query, params = list(input_gen, input_tier, start_date, end_date))
-  
+    query = sprintf("SELECT * FROM Data WHERE gen = ? AND tier = ? AND date >= ? AND date <= ?")
+    df = dbGetQuery(connection, query, params = list(input_gen, input_tier, start_date, end_date))
+
   if (type == "usage") {
     df = df %>%
       filter(!(name %in% team_vals))
@@ -165,11 +164,15 @@ read_data = function(type, input_gen, input_tier, start_month, start_year, end_m
   
   df$date = as.Date(df$date, format = "%Y-%m-%d")
   
-  db_cutoff_date = max(df$date)
-  
-  if(db_cutoff_date == as.Date(end_date)) {
-    return(df)
+  if (nrow(df) > 0) {
+    db_cutoff_date = max(df$date)
+    if(db_cutoff_date == as.Date(end_date)) {
+      return(df)
+    }
   } else {
+    db_cutoff_date = as.Date(start_date) %m-% months(1)
+  }
+  
     urls = list()
     cutoff_month = month(db_cutoff_date)
     cutoff_year = year(db_cutoff_date)
@@ -197,5 +200,4 @@ read_data = function(type, input_gen, input_tier, start_month, start_year, end_m
       arrange(name, date)
     
     return(df)
-  }
 }

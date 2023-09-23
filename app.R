@@ -11,15 +11,21 @@ library(ggfun)
 library(RSQLite)
 library(DBI)
 library(lubridate)
+library(grid)
 
 # TODO
 # hyphen wrapping does not work well for ruin legendaries
 # names in bottom legend have space to the right even when there's nothing to their right
+# elo gap plot arrows
+# default mon selections
 
 font_add_google("Lato", "Lato")
 
 source("colormatch.R")
 source("read_data.R")
+
+accessible_colors = c("#77AADD", "#EE8866", "#EEDD88", "#BBCC33", "#FFAABB")
+
 
 # calculate elo gap
 calculate_gap = function(df) {
@@ -61,6 +67,9 @@ months = ifelse(1:12 < 10, paste0("0", 1:9), 1:12)
 
 con = dbConnect(RSQLite::SQLite(), dbname = "data/smogon.db")
 
+# default pokemon selections
+default_mons = c("Great Tusk", "Kingambit", "Gholdengo", "Dragapult")
+
 # UI
 ui = navbarPage(
     title = tags$div(
@@ -100,73 +109,83 @@ ui = navbarPage(
     )
   ),
   
-  tabPanel("Mons",
-    fluidPage(
-  sidebarLayout(
-    sidebarPanel(
-      selectInput("generation", "Generation", choices = paste0("Gen ", 1:9)),
-      selectInput("tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU", "PU"),
-                  selected = "OU"),
-      fluidRow(
-        column(width = 6, 
-               selectInput("start_month", "Start Month", choices = months)),
-        column(width = 6,
-               numericInput("start_year", "Start Year", 2023))
-      ),
-      
-      fluidRow(
-        column(width = 6, 
-               selectInput("end_month", "End Month", choices = months)),
-        column(width = 6,
-               numericInput("end_year", "End Year", 2023))
-      ),
-      uiOutput("pokemon"),
-      uiOutput("usage_elo")
-    ),
-    
-    mainPanel(
-      tabsetPanel(
-        tabPanel("Usage", 
-                 tags$div(
-                   style = "margin-top: 20px;",
-                   textOutput("usage_data_msg"),
-                   plotOutput("usage_plot")
-                   
-                 )), 
-        tabPanel("Elo Gap", 
-                 tags$div(
-                   style = "margin-top: 20px",
-                   textOutput("elo_data_msg"),
-                   plotOutput("elo_gap_plot"))
-        )
-      )
-    )
-  )
-  )
-  ),
-  
-  tabPanel("Teams",
+  tabPanel("Pokémon",
            fluidPage(
              sidebarLayout(
                sidebarPanel(
-                 selectInput("teams_gen", "Generation", choices = paste0("Gen ", 1:9)),
-                 selectInput("teams_tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU", "PU"),
+                 selectInput("generation", "Generation", choices = paste0("Gen ", 1:9),
+                             selected = "Gen 9"),
+                 selectInput("tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU", "PU"),
                              selected = "OU"),
                  fluidRow(
                    column(width = 6, 
-                          selectInput("teams_start_month", "Start Month", choices = months)),
+                          selectInput("start_month", "Start Month", choices = months,
+                                      selected = "01")),
                    column(width = 6,
-                          numericInput("teams_start_year", "Start Year", 2023))
+                          numericInput("start_year", "Start Year", min = 2014, max = 2023,
+                                       value = 2023))
                  ),
                  
                  fluidRow(
                    column(width = 6, 
-                          selectInput("teams_end_month", "End Month", choices = months)),
+                          selectInput("end_month", "End Month", choices = months,
+                                      selected = "07")),
                    column(width = 6,
-                          numericInput("teams_end_year", "End Year", 2023))
+                          numericInput("end_year", "End Year", min = 2014, max = 2023,
+                                       value = 2023))
+                 ),
+                 uiOutput("pokemon"),
+                 uiOutput("usage_elo")
+               ),
+               
+               mainPanel(
+                 tabsetPanel(
+                   tabPanel("Usage", 
+                            tags$div(
+                              style = "margin-top: 20px;",
+                              textOutput("usage_data_msg"),
+                              plotOutput("usage_plot")
+                              
+                            )), 
+                   tabPanel("Elo Gap", 
+                            tags$div(
+                              style = "margin-top: 20px",
+                              textOutput("elo_data_msg"),
+                              plotOutput("elo_gap_plot"))
+                   )
+                 )
+               )
+             )
+           )
+  ),
+
+  tabPanel("Teams",
+           fluidPage(
+             sidebarLayout(
+               sidebarPanel(
+                 selectInput("teams_gen", "Generation", choices = paste0("Gen ", 1:9), 
+                             selected = "Gen 9"),
+                 selectInput("teams_tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU", "PU"),
+                             selected = "OU"),
+                 fluidRow(
+                   column(width = 6, 
+                          selectInput("teams_start_month", "Start Month", choices = months,
+                                      selected = "01")),
+                   column(width = 6,
+                          numericInput("teams_start_year", "Start Year", min = 2014,
+                                       max = 2023, value = 2023))
+                 ),
+                 
+                 fluidRow(
+                   column(width = 6, 
+                          selectInput("teams_end_month", "End Month", choices = months,
+                                      selected = "07")),
+                   column(width = 6,
+                          numericInput("teams_end_year", "End Year", min = 2014,
+                                       max = 2023, value = 2023)
                  ),
                  uiOutput("teams_elo")
-               ),
+               )),
                mainPanel(
                  tabsetPanel(
                    tabPanel("Weather", 
@@ -191,16 +210,18 @@ ui = navbarPage(
            fluidPage(
              sidebarLayout(
                sidebarPanel(
-                 selectInput("sum_gen", "Generation", choices = paste0("Gen ", 1:9)),
+                 selectInput("sum_gen", "Generation", choices = paste0("Gen ", 1:9),
+                             selected = "Gen 9"),
                  selectInput("sum_tier", "Tier", choices = c("Ubers", "OU", "UU", "RU", "NU", "PU"),
                              selected = "OU"),
                  fluidRow(
                    column(width = 6, 
-                          selectInput("sum_month", "Month", choices = months)),
+                          selectInput("sum_month", "Month", choices = months,
+                                      selected = "07")),
                    column(width = 6,
-                          numericInput("sum_year", "Year", 2023))
+                          numericInput("sum_year", "Year", min = 2014, max = 2023,
+                                       value = 2023))
                  ),
-                 selectInput("chart_type", "Chart Type", choices = c("Bar", "Pie")),
                  uiOutput("sum_elo")
                ),
                mainPanel(
@@ -234,17 +255,30 @@ ui = navbarPage(
                )
              )
            )),
+  
   tabPanel("About",
            fluidRow(class = "about-class",
-             column(width = 12,
-                    h3("About SmogonTrends"),
-                    hr(),
-                    p("SmogonTrends allows users to visualize usage and metagame data from Pokémon Showdown, a popular online battle simulator.
-                      This app was developed by Kelly Culpepper using the R Shiny framework."),
-                    p("The primary data source for this project is ", a("Smogon.", href = "https://www.smogon.com/stats/"), " Additional data is sourced from ", a("pokemonData,", href = "https://github.com/lgreski/pokemonData"), " authored by lgreski, and ", a("Bulbapedia.", href = "https://bulbagarden.net/")),
-                    p("The full source code for this app is available on ", a("Github.", href = "https://github.com/kellygculpepper/SmogonTrends"), " Feel free to provide feedback or report any bugs via the Issues section.")
-             )
-           ))
+                    column(width = 12,
+                           h3("About Pokémon Showdown"),
+                           hr(),
+                           p("Pokémon Showdown is a popular online battle simulator for competitive Pokémon.
+                             "),
+                           p("Users create teams of 6 Pokémon and select a generation & tier to play."),
+                           p("
+                             Generation describes which Pokémon game is being simulated.
+                             The most recent is Generation 9, which includes Pokémon from Scarlet & Violet."),
+                           p("Tiers are a unique system that groups Pokémon by power.
+                             The most popular tier is Overused (OU).
+                             "),
+                           p("Elo ratings are used to measure a player's skill."),
+                           h3("About SmogonTrends"),
+                           hr(),
+                           p("Through interactive visualizations, SmogonTrends aims to help competitive players understand the game's history and make informed team-building decisions."),
+                           p("This app was developed by Kelly Culpepper using the R Shiny framework and SQL."),
+                           p("Data is sourced from ", a("Smogon,", href = "https://www.smogon.com/stats/"), " ", a("pokemonData,", href = "https://github.com/lgreski/pokemonData"), "and ", a("Bulbapedia.", href = "https://bulbagarden.net/")),
+                           p("The full source code is available on ", a("Github.", href = "https://github.com/kellygculpepper/SmogonTrends"))
+                    )
+           )),
 )
 
 # Server
@@ -265,12 +299,12 @@ server = function(input, output, session) {
   teams_has_no_data = reactiveVal(FALSE)
   sum_has_no_data = reactiveVal(FALSE)
   
-  selected_pokemon = reactiveVal(character(0))
+  selected_pokemon = reactiveVal(default_mons)
   
   # read data when user changes gen/tier/elo/time input (ELO removed for now, need to fix)
   observeEvent(list(input$generation, input$tier, input$start_month, input$start_year, input$end_month, input$end_year), {
-    
-    gen = as.integer(substr(input$generation, 5, 5))
+  
+    gen = substr(input$generation, 5, 5)
     tier = tolower(input$tier)
     
     df = read_data(type = "usage", input_gen = gen, input_tier = tier, 
@@ -290,7 +324,7 @@ server = function(input, output, session) {
       unique_pokemon(unique(df$name))
       
       choices = sort(unique_pokemon())
-      selected = input$pokemon
+      selected = selected_pokemon()
       if (!is.null(selected)) {
         selected = intersect(selected, choices)
         selected_pokemon(selected)
@@ -311,7 +345,7 @@ server = function(input, output, session) {
   # teams
   observeEvent(list(input$teams_gen, input$teams_tier, input$teams_start_month, input$teams_start_year, input$teams_end_month, input$teams_end_year), {
     
-    gen = as.integer(substr(input$teams_gen, 5, 5))
+    gen = substr(input$teams_gen, 5, 5)
     tier = tolower(input$teams_tier)
     
     df = read_data(type = "team", input_gen = gen, input_tier = tier, 
@@ -337,7 +371,7 @@ server = function(input, output, session) {
   # monthly summary
   observeEvent(list(input$sum_gen, input$sum_tier, input$sum_year, input$sum_month), {
   
-    gen = as.integer(substr(input$sum_gen, 5, 5))
+    gen = substr(input$sum_gen, 5, 5)
     tier = tolower(input$sum_tier)
     
     usage_df = read_data(type = "usage", input_gen = gen, input_tier = tier, 
@@ -414,7 +448,7 @@ server = function(input, output, session) {
     selected_data = selected_data %>%
       filter(elo == input$usage_elo) %>%
       match_colors()
-    color_mapping = setNames(selected_data$color, selected_data$name)
+    # color_mapping = setNames(selected_data$color, selected_data$name)
     
     num_months = length(unique(selected_data$date))
     if (num_months <= 6) {
@@ -428,13 +462,9 @@ server = function(input, output, session) {
       labs(x = "Month", y = "Usage (%)", color = "Pokémon", title = "Usage over time") +
       theme_minimal(base_size = 16, base_family = "Lato") +
       scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
-      scale_color_manual(values = color_mapping) +
-      theme(
-        legend.position = "bottom",
-        legend.title = element_blank(), 
-        legend.box.background = element_roundrect(fill = "transparent", colour = "#DDDDDD", size = 0.7, linetype = "solid"),
-        legend.text = element_text(margin = margin(r = 25, unit = "pt"))
-  ) 
+      #scale_color_manual(values = color_mapping) +
+      scale_color_manual(values = accessible_colors) + 
+      legend_theme
   }}, height = 500)
   
   output$elo_gap_plot = renderPlot({
@@ -447,7 +477,7 @@ server = function(input, output, session) {
     selected_data = selected_data %>%
       calculate_gap() %>%
       match_colors()
-    color_mapping = setNames(selected_data$color, selected_data$name)
+    # color_mapping = setNames(selected_data$color, selected_data$name)
     
     num_months = length(unique(selected_data$date))
     if (num_months <= 6) {
@@ -462,8 +492,10 @@ server = function(input, output, session) {
       theme_minimal(base_size = 16, base_family = "Lato") +
       ggtitle("Difference in Usage (Highest Elo minus all) over time") +
       scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
-      scale_color_manual(values = color_mapping) +
-      legend_theme
+      #scale_color_manual(values = color_mapping) +
+      scale_color_manual(values = accessible_colors) +
+      legend_theme #+ 
+      #theme(axis.line.y = element_line(arrow = grid::arrow(length = unit(0.3, "cm"), ends = "both")))
   }}, height = 500)
 
 output$weather_plot = renderPlot({
@@ -551,7 +583,7 @@ output$sum_usage_plot = renderPlot({
     coord_flip() +
     theme_void(base_size = 16, base_family = "Lato") +
     theme(axis.text.y = element_text(hjust = 1, size = name_size)) +
-    labs(x = NULL, y = "Usage", title = paste0("Usage of ", input$sum_gen, " ", input$sum_tier, " Mons"),
+    labs(x = NULL, y = "Usage", title = paste0("Usage of ", input$sum_gen, " ", input$sum_tier, " Pokémon"),
          subtitle = paste0(input$sum_month, "-", input$sum_year)) +
     geom_text(aes(label = paste0(sprintf("%.1f", usage),"%")), position = position_stack(vjust = 0.5), color = 'black', size = 4) +
     guides(fill = FALSE)
@@ -595,7 +627,6 @@ output$sum_elo_plot = renderPlot({
         }
 }, height = 600)
 
-# plot_height = 400
 output$sum_weather_plot = renderPlot({
   if (input$sum_gen != "Gen 1") {
   req(sum_teams_filtered())
@@ -610,42 +641,16 @@ output$sum_weather_plot = renderPlot({
   weather_color_mapping = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8", "weatherless" = "#cccccf")
   weather_label_mapping = c("rain" = "Rain", "sun" = "Sun", "sand" = "Sand", "hail" = "Hail", "weatherless" = "None")
   
-  if (input$chart_type == "Bar") {
     ggplot(sum_teams_filtered, aes(x = name, y = usage, fill = name)) +
       geom_bar(stat = "identity") + 
-      labs(y = "Usage", x = "Weather", title = "Weather Team Usage",
+      labs(y = "Usage", x = "Weather", title = paste0("Weather Team Usage, ", input$sum_gen, " ", input$sum_tier),
            subtitle = paste0(input$sum_month, "-", input$sum_year)) +
       theme_minimal(base_size = 16, base_family = "Lato") +
       scale_fill_manual(values = weather_color_mapping, drop = FALSE) +
       scale_x_discrete(labels = weather_label_mapping) +
       guides(fill = FALSE)
   }
-  
-  else {
-    # plot_height = 500
-    sum_teams_filtered2 = sum_teams_filtered %>% 
-      mutate(csum = rev(cumsum(rev(usage))), 
-             pos = usage/2 + lead(csum, 1),
-             pos = if_else(is.na(pos), usage/2, pos))
-    
-    ggplot(sum_teams_filtered2, aes(x = "" , y = usage, fill = fct_inorder(name))) +
-      geom_col(width = 1) +
-      coord_polar(theta = "y") +
-      scale_fill_manual(values = weather_color_mapping,
-                        labels = weather_label_mapping, drop = FALSE) +
-      geom_label_repel(data = sum_teams_filtered2,
-                       aes(y = pos, label = paste0(round(usage), "%")),
-                       size = 6.5, nudge_x = 0.7, show.legend = FALSE, box.padding = 0.1, label.size = 0,
-                       color = "white", segment.color = "black") +
-      theme_void(base_size = 16, base_family = "Lato") +
-      labs(x = NULL, y = NULL, fill = "Weather", title = "Weather Team Usage", 
-           subtitle = paste0(input$sum_month, "-", input$sum_year)) +
-      legend_theme
-  }
-  }
 }})
-
-# , height = plot_height
 
 output$sum_msg = renderText({
   if(input$sum_gen == "Gen 1") "Weather is unavailable in Gen 1."
@@ -664,34 +669,13 @@ output$sum_style_plot = renderPlot({
   style_color_mapping = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#E0B0D5", "semistall" = "#abd9e9", "stall" = "#2c7bb6")
   style_label_mapping = c("hyperoffense" = "Hyperoffense", "offense" = "Offense", "balance" = "Balance", "semistall" = "Semistall", "stall" = "Stall")
   
-  if (input$chart_type == "Bar") {
     ggplot(sum_teams_filtered, aes(x = name, y = usage, fill = name)) +
       geom_bar(stat = "identity") +
-      labs(y = "Usage", x = "Playstyle",  title = "Team Style Usage", subtitle = paste0(input$sum_month, "-", input$sum_year)) + 
+      labs(y = "Usage", x = "Playstyle",  title = paste0("Team Style Usage, ", input$sum_gen, " ", input$sum_tier), subtitle = paste0(input$sum_month, "-", input$sum_year)) + 
       theme_minimal(base_size = 16, base_family = "Lato") + 
       scale_fill_manual(values = style_color_mapping, drop = FALSE) +
       scale_x_discrete(labels = style_label_mapping) +
       guides(fill = FALSE)
-  }
-  
-  else {
-    sum_teams_filtered2 = sum_teams_filtered %>% 
-      mutate(csum = rev(cumsum(rev(usage))), 
-             pos = usage/2 + lead(csum, 1),
-             pos = if_else(is.na(pos), usage/2, pos))
-    
-    ggplot(sum_teams_filtered2, aes(x = "" , y = usage, fill = fct_inorder(name))) +
-      geom_col(width = 1) +
-      coord_polar(theta = "y") +
-      scale_fill_manual(values = style_color_mapping,
-                        labels = style_label_mapping, drop = FALSE) +
-      geom_label_repel(data = sum_teams_filtered2,
-                       aes(y = pos, label = paste0(round(usage), "%")), color = "white", segment.color = "black",
-                       size = 6.5, nudge_x = 0.7, show.legend = FALSE, box.padding = 0.1, label.size = 0) +
-      theme_void(base_size = 16, base_family = "Lato") +
-      labs(x = NULL, y = NULL, fill = "Playstyle", title = "Team Style Usage", 
-           subtitle = paste0(input$sum_month, "-", input$sum_year))
-  }
 }})
 
 generate_data_message = function(has_no_data) {
