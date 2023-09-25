@@ -415,11 +415,18 @@ server = function(input, output, session) {
     tf
   })
   
+  sum_usage_elo_filtered = reactive({
+    req(sum_usage_data(), input$sum_elo)
+    sef = sum_usage_data() %>%
+      filter(usage >= 4.52) %>%
+      calculate_gap()
+    sef
+  })
+  
   sum_usage_filtered = reactive({
     req(sum_usage_data(), input$sum_elo)
     suf = sum_usage_data() %>%
-      filter(elo == input$sum_elo & usage >= 4.52) %>%
-      calculate_gap()
+      filter(elo == input$sum_elo & usage >= 4.52)
     suf
   })
   
@@ -568,8 +575,6 @@ output$sum_usage_plot = renderPlot({
     return(NULL)
   } else {
   sum_usage_filtered = sum_usage_filtered()
-  sum_usage_filtered = sum_usage_filtered %>%
-    filter(usage >= 4.52)
   
   sum_usage_filtered = sum_usage_filtered[order(sum_usage_filtered$usage),]
   sum_usage_filtered$rank = nrow(sum_usage_filtered):1
@@ -597,16 +602,13 @@ output$sum_usage_plot = renderPlot({
 }, height = function(){30 * nrow(sum_usage_filtered())})
 
 output$sum_elo_plot = renderPlot({
-  req(sum_usage_data())
+  req(sum_usage_elo_filtered())
   if(sum_has_no_data()) {
     return(NULL)
   } else {
-    sum_usage_data = sum_usage_data()
+    sum_usage_data = sum_usage_elo_filtered()
+    
     sum_usage_data = sum_usage_data %>%
-      filter(usage >= 4.52)
-    sum_usage_data$date = as.Date(paste(sum_usage_data$year, sum_usage_data$month, "01", sep = "-"), format = "%Y-%m-%d")
-    sum_usage_data = sum_usage_data %>%
-      calculate_gap() %>%
       filter(elo_gap > 1) # hypothetically interested in all >0 but doing this for now
     
     sum_usage_data = sum_usage_data[order(sum_usage_data$elo_gap),]
