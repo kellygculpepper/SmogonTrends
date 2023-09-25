@@ -447,7 +447,9 @@ server = function(input, output, session) {
     selected_data = selected_data()
     selected_data = selected_data %>%
       filter(elo == input$usage_elo) %>%
-      match_colors()
+      match_colors() %>%
+      mutate(name = factor(name, levels = input$pokemon)) %>%
+      arrange(name, date)
     # color_mapping = setNames(selected_data$color, selected_data$name)
     
     num_months = length(unique(selected_data$date))
@@ -476,7 +478,9 @@ server = function(input, output, session) {
     selected_data = selected_data()
     selected_data = selected_data %>%
       calculate_gap() %>%
-      match_colors()
+      match_colors() %>%
+      mutate(name = factor(name, levels = input$pokemon)) %>%
+      arrange(name, date)
     # color_mapping = setNames(selected_data$color, selected_data$name)
     
     num_months = length(unique(selected_data$date))
@@ -524,7 +528,8 @@ output$weather_plot = renderPlot({
     theme_minimal(base_size = 16, base_family = "Lato") + 
     scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
     scale_color_manual(values = c("rain" = "#6890F0", "sun" = "#F08030", "sand" = "#B8A038", "hail" = "#98D8D8"),
-                       labels = c("Rain", "Sun", "Sand", "Hail"))
+                       labels = c("Rain", "Sun", "Sand", "Hail")) +
+    legend_theme
   }
 }}, height = 500)
 
@@ -553,7 +558,8 @@ output$style_plot = renderPlot({
     ggtitle("Usage over time") + 
     scale_x_date(date_breaks = breaks, labels = function(z) gsub("^0", "", strftime(z, "%m/%y"))) +
     scale_color_manual(values = c("hyperoffense" = "#d7191c", "offense" = "#fdae61", "balance" = "#E0B0D5", "semistall" = "#abd9e9", "stall" = "#2c7bb6"),
-                       labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall"))
+                       labels = c("Hyperoffense", "Offense", "Balance", "Semistall", "Stall")) +
+    legend_theme
 }}, height = 500)
 
 output$sum_usage_plot = renderPlot({
